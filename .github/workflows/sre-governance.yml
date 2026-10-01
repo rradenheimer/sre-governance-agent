@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
   pull-requests: write
   security-events: write    # required to upload SARIF
 
@@ -35,52 +34,6 @@ jobs:
 
       - name: Install engine
         run: pip install pyyaml
-
-      - name: Restore prior audit chain
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          PRIOR_RUNS="$(gh run list --workflow sre-governance.yml --branch main --event push \
-            --status completed --limit 100 --json databaseId --jq '.[].databaseId')"
-          if [ -n "$PRIOR_RUNS" ]; then
-            RESTORED=false
-            for PRIOR_RUN in $PRIOR_RUNS; do
-              CANDIDATE="$RUNNER_TEMP/sre-governance-audit-$PRIOR_RUN"
-              mkdir -p "$CANDIDATE"
-              if gh run download "$PRIOR_RUN" --name sre-governance-audit \
-                --dir "$CANDIDATE/durable" >/dev/null 2>&1; then
-                ARCHIVE="$CANDIDATE/durable/audit-chain.tar.gz"
-                if tar -xOzf "$ARCHIVE" .sre/audit.jsonl > "$CANDIDATE/audit.jsonl" 2>/dev/null \
-                  && tar -xOzf "$ARCHIVE" .sre/audit.jsonl.head > "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
-                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
-                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
-                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
-                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
-                  RESTORED=true
-                  break
-                fi
-              fi
-              if gh run download "$PRIOR_RUN" --name sre-governance-reports \
-                --dir "$CANDIDATE/reports" >/dev/null 2>&1; then
-                if cp "$CANDIDATE/reports/.sre/audit.jsonl" "$CANDIDATE/audit.jsonl" 2>/dev/null \
-                  && cp "$CANDIDATE/reports/.sre/audit.jsonl.head" "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
-                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
-                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
-                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
-                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
-                  RESTORED=true
-                  break
-                fi
-              fi
-            done
-            if [ "$RESTORED" != true ]; then
-              echo "::error::No valid prior audit artifact found; refusing to reset audit history."
-              exit 1
-            fi
-          else
-            echo "::notice::No prior audit run found; starting with the checked-in audit chain."
-          fi
 
       - name: Resolve profile
         id: profile

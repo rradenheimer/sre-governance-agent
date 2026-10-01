@@ -109,18 +109,12 @@ def test_release_and_iac_workflows_have_real_gates():
             if step.get("uses", "").startswith("actions/checkout@")
         )
         assert checkout.get("with", {}).get("persist-credentials") == "false"
-        assert any(step.get("name") == "Restore prior audit chain"
-                   for step in governance["jobs"]["governance-scan"]["steps"])
+        assert not any("gh run download" in step.get("run", "")
+                       for step in governance["jobs"]["governance-scan"]["steps"])
+        assert "actions" not in governance["permissions"]
         assert "workflow_dispatch" not in governance["on"]
-        restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]
-                       if step.get("name") == "Restore prior audit chain")
-        assert restore["if"] == "github.event_name == 'push' && github.ref == 'refs/heads/main'"
-        assert "sre-governance-reports" in restore["run"]
-        assert "--limit 100" in restore["run"]
-        assert "--branch main --event push" in restore["run"]
-        assert "for PRIOR_RUN in $PRIOR_RUNS" in restore["run"]
-        assert "verify-audit" in restore["run"]
-        assert "No valid prior audit artifact found" in restore["run"]
+        assert any("python -m sre_governance.cli verify-audit" in step.get("run", "")
+                   for step in governance["jobs"]["governance-scan"]["steps"])
         assert any(step.get("name") == "Persist audit chain for the next run"
                    for step in governance["jobs"]["governance-scan"]["steps"])
 
