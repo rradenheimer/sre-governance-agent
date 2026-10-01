@@ -118,7 +118,7 @@ def _check_metadata_gte(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, s
     threshold = params["value"]
     val = scan.metadata_value(key)
     try:
-        if val is not None and float(val) >= float(threshold):
+        if val is not None and not isinstance(val, bool) and float(val) >= float(threshold):
             return True, f"{key}={val} >= {threshold}"
     except (TypeError, ValueError):
         pass
