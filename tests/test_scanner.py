@@ -176,6 +176,51 @@ jobs:
     )
     assert has_sca_configuration(scan_repo(tmp_path))
 
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: mix\n"
+        "    directories: [/, /packages/*]\n"
+        "    schedule:\n"
+        "      interval: quarterly\n",
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("package-ecosystem: mix", "package-ecosystem: pipenv"),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: pip\n"
+        "    directories: []\n"
+        "    schedule:\n"
+        "      interval: weekly\n",
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: pip\n"
+        "    directory: /\n"
+        "    schedule:\n"
+        "      interval: cron\n"
+        "      cronjob: 0 9 * * 1\n",
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: pip\n"
+        "    directory: /\n"
+        "    schedule:\n"
+        "      interval: weekly\n",
+        encoding="utf-8",
+    )
     workflow.write_text(
         workflow.read_text(encoding="utf-8").replace(
             "fail-on-severity: critical",

@@ -401,22 +401,8 @@ def has_sca_configuration(scan: RepoScan) -> bool:
         if path.endswith(("dependabot.yml", "dependabot.yaml")):
             updates = data.get("updates") if isinstance(data, dict) else None
             configured = isinstance(data, dict) and data.get("version") == 2 \
-                and isinstance(updates, list) and any(
-                isinstance(item, dict)
-                and isinstance(item.get("package-ecosystem"), str)
-                and item["package-ecosystem"] in {
-                    "bundler", "cargo", "composer", "devcontainers", "docker",
-                    "docker-compose", "dotnet-sdk", "elm", "gitsubmodule",
-                    "github-actions", "gomod", "gradle", "helm", "maven", "npm",
-                    "nuget", "pip", "pipenv", "pub", "swift", "terraform",
-                    "uv", "vcpkg",
-                }
-                and isinstance(item.get("directory"), str)
-                and item["directory"].startswith("/")
-                and isinstance(item.get("schedule"), dict)
-                and item["schedule"].get("interval") in {"daily", "weekly", "monthly"}
-                for item in updates
-            )
+                and isinstance(updates, list) \
+                and any(_dependabot_update_enabled(item) for item in updates)
         else:
             configured = _renovate_enabled(data)
         if configured:
@@ -459,6 +445,38 @@ def has_sca_configuration(scan: RepoScan) -> bool:
                 ):
                     return True
     return False
+
+
+def _dependabot_update_enabled(item: Any) -> bool:
+    ecosystems = {
+        "bazel", "bun", "bundler", "cargo", "composer", "conda", "deno",
+        "devcontainers", "docker", "docker-compose", "dotnet-sdk", "elm",
+        "gitsubmodule", "github-actions", "gomod", "gradle", "helm", "julia",
+        "maven", "mix", "nix", "npm", "nuget", "opentofu", "pip", "pre-commit",
+        "pub", "rust-toolchain", "sbt", "swift", "terraform", "uv", "vcpkg",
+    }
+    if not isinstance(item, dict) or item.get("package-ecosystem") not in ecosystems:
+        return False
+    if "directory" in item and "directories" not in item:
+        directories = [item["directory"]]
+    elif "directories" in item and "directory" not in item \
+            and isinstance(item["directories"], list):
+        directories = item["directories"]
+    else:
+        return False
+    if not directories or any(
+        not isinstance(directory, str) or not directory.startswith("/")
+        for directory in directories
+    ):
+        return False
+    schedule = item.get("schedule")
+    if not isinstance(schedule, dict):
+        return False
+    interval = schedule.get("interval")
+    if interval in {"daily", "weekly", "monthly", "quarterly", "semiannually", "yearly"}:
+        return True
+    return interval == "cron" and isinstance(schedule.get("cronjob"), str) \
+        and bool(schedule["cronjob"].strip())
 
 
 def _continues_on_error(config: dict[str, Any]) -> bool:
