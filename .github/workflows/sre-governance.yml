@@ -1,0 +1,165 @@
+name: SRE Governance
+
+# Runs the deterministic policy engine on every PR and on a schedule, uploads a
+# SARIF report to the Security tab, comments the Markdown report on the PR, and
+# enforces the policy gate according to the repo's industry profile.
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+  schedule:
+    - cron: "0 7 * * 1"   # weekly Monday 07:00 UTC continuous-monitoring sweep
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+  security-events: write    # required to upload SARIF
+
+concurrency:
+  group: sre-governance-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  governance-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install engine
+        run: pip install pyyaml
+
+      - name: Restore prior audit chain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          PRIOR_RUNS="$(gh run list --workflow sre-governance.yml --branch "$BRANCH" \
+            --status completed --limit 100 --json databaseId --jq '.[].databaseId')"
+          if [ -n "$PRIOR_RUNS" ]; then
+            RESTORED=false
+            for PRIOR_RUN in $PRIOR_RUNS; do
+              CANDIDATE="$RUNNER_TEMP/sre-governance-audit-$PRIOR_RUN"
+              mkdir -p "$CANDIDATE"
+              if gh run download "$PRIOR_RUN" --name sre-governance-audit \
+                --dir "$CANDIDATE/durable" >/dev/null 2>&1; then
+                ARCHIVE="$CANDIDATE/durable/audit-chain.tar.gz"
+                if tar -xOzf "$ARCHIVE" .sre/audit.jsonl > "$CANDIDATE/audit.jsonl" 2>/dev/null \
+                  && tar -xOzf "$ARCHIVE" .sre/audit.jsonl.head > "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
+                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
+                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
+                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
+                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
+                  RESTORED=true
+                  break
+                fi
+              fi
+              if gh run download "$PRIOR_RUN" --name sre-governance-reports \
+                --dir "$CANDIDATE/reports" >/dev/null 2>&1; then
+                if cp "$CANDIDATE/reports/.sre/audit.jsonl" "$CANDIDATE/audit.jsonl" 2>/dev/null \
+                  && cp "$CANDIDATE/reports/.sre/audit.jsonl.head" "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
+                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
+                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
+                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
+                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
+                  RESTORED=true
+                  break
+                fi
+              fi
+            done
+            if [ "$RESTORED" != true ]; then
+              echo "::error::No valid prior audit artifact found; refusing to reset audit history."
+              exit 1
+            fi
+          else
+            echo "::notice::No prior audit run found; starting with the checked-in audit chain."
+          fi
+
+      - name: Resolve profile
+        id: profile
+        shell: bash
+        run: |
+          PROFILE=""
+          if [ -f .sre/profile ]; then PROFILE=$(cat .sre/profile | tr -d '[:space:]'); fi
+          if [ -z "$PROFILE" ]; then PROFILE="commercial"; fi
+          echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
+          echo "Resolved industry profile: $PROFILE"
+
+      - name: Run governance scan
+        id: scan
+        shell: bash
+        run: |
+          set +e
+          PYTHONPATH=src python -m sre_governance.cli scan \
+            --repo . \
+            --profile "${{ steps.profile.outputs.profile }}" \
+            --format all \
+            --out sre-reports \
+            --audit .sre/audit.jsonl
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Verify audit chain
+        run: PYTHONPATH=src python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
+
+      - name: Policy-as-code gate (OPA/Rego with Python fallback, advisory)
+        continue-on-error: true
+        run: |
+          python scripts/opa_gate.py --report sre-reports/sre-governance-report.json
+
+      - name: Upload SARIF to Security tab
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: sre-reports/sre-governance.sarif
+        continue-on-error: true
+
+      - name: Upload report artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-governance-reports
+          path: |
+            sre-reports/
+            .sre/audit.jsonl
+            .sre/audit.jsonl.head
+
+      - name: Prepare durable audit artifact
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/audit-chain.tar.gz" .sre/audit.jsonl .sre/audit.jsonl.head
+
+      - name: Persist audit chain for the next run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-governance-audit
+          path: ${{ runner.temp }}/audit-chain.tar.gz
+          if-no-files-found: error
+
+      - name: Comment report on PR
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('sre-reports/sre-governance-report.md', 'utf8');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: body.slice(0, 65000),
+            });
+
+      - name: Enforce policy gate
+        if: steps.scan.outputs.exit_code != '0'
+        run: |
+          echo "::error::SRE governance policy gate failed under blocking enforcement."
+          exit 1

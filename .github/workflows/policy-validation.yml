@@ -1,0 +1,64 @@
+name: Policy Validation
+
+# Validates the control catalog and industry profiles and runs the engine's unit
+# tests. This protects the governance rules themselves from regressions — the
+# policies are code and are tested like code.
+
+on:
+  pull_request:
+    paths:
+      - "config/**"
+      - "src/**"
+      - "tests/**"
+      - "policies/**"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install pyyaml pytest
+      - name: Validate catalog + profiles
+        run: PYTHONPATH=src python -m sre_governance.cli validate-config
+      - name: Run engine tests
+        run: python -m pytest -q
+      - name: Build release source archive
+        run: |
+          mkdir dist
+          git archive --format=tar.gz --output=dist/sre-governance-agent.tar.gz \
+            HEAD src config agents docs policies requirements.txt README.md LICENSE VERSION
+      - name: Generate candidate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          file: dist/sre-governance-agent.tar.gz
+          format: spdx-json
+          output-file: dist/sre-governance-agent.spdx.json
+      - name: Validate release SBOM
+        run: |
+          jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length > 0)' \
+            dist/sre-governance-agent.spdx.json
+      - name: Install Conftest
+        run: |
+          version=0.56.0
+          curl --fail --location --silent --show-error \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${version}/conftest_${version}_Linux_x86_64.tar.gz" \
+            --output /tmp/conftest.tar.gz
+          tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
+          sudo install /tmp/conftest /usr/local/bin/conftest
+      - name: Verify OPA policies
+        run: conftest verify --policy policies/opa
+      - name: Policy gate self-check (sample report)
+        run: |
+          PYTHONPATH=src python -m sre_governance.cli scan --repo . \
+            --profile commercial --format json --out sre-reports --audit .sre/audit.jsonl
+          python scripts/opa_gate.py --report sre-reports/sre-governance-report.json

@@ -1,0 +1,351 @@
+# SRE Governance Agent — Master Control Catalog
+# ---------------------------------------------------------------------------
+# A single, framework-neutral catalog of SRE + governance controls. Industry
+# profiles (see config/industry-profiles/) select which controls are MANDATORY,
+# RECOMMENDED, or NOT_APPLICABLE and may tighten thresholds.
+#
+# Each control is deterministically evaluated by the policy engine
+# (src/sre_governance/engine.py) using the `check` block. AI agents never
+# decide pass/fail — they only interpret results and propose remediations.
+#
+# `check.type` must be one of the evaluators registered in engine.CHECKS:
+#   file_exists | file_absent | workflow_present | content_match |
+#   metadata_true | metadata_gte | metadata_in | workflow_security_scan |
+#   observability_configured | slo_configured | audit_log_verified |
+#   sca_configured
+# ---------------------------------------------------------------------------
+version: "1.0.0"
+schema_version: 1
+
+controls:
+  # ----------------------------- RELIABILITY / SRE -----------------------------
+  - id: SRE-SLO-001
+    title: Service Level Objectives are defined and version-controlled
+    category: reliability
+    severity: critical
+    automatable: true
+    description: >
+      Every production service must declare SLIs and SLOs as code so that
+      reliability targets are explicit, reviewable, and testable.
+    rationale: SLOs are the foundation of SRE; error budgets cannot exist without them.
+    check:
+      type: slo_configured
+      any_of: [".sre/slo.yaml", ".sre/slo.yml", "slo/", "sre/slo.yaml"]
+    remediation: Add a .sre/slo.yaml declaring SLIs, SLO targets, and measurement windows.
+    mappings:
+      NIST-800-53: ["CP-2", "SA-4"]
+      SOC2: ["A1.1"]
+      DORA-EU: ["Art.6"]
+
+  - id: SRE-EB-002
+    title: Error budget policy is documented
+    category: reliability
+    severity: high
+    automatable: true
+    description: Defines actions taken when error budget is exhausted (e.g., feature freeze).
+    rationale: Error budgets convert reliability into an actionable engineering decision.
+    check:
+      type: metadata_true
+      key: sre.error_budget_policy_defined
+    remediation: Declare error_budget_policy_defined and the freeze policy in .sre/governance.yaml.
+    mappings:
+      NIST-800-53: ["CP-2"]
+      SOC2: ["A1.1"]
+
+  - id: SRE-INC-003
+    title: Incident management + blameless postmortem process exists
+    category: reliability
+    severity: high
+    automatable: true
+    description: Documented incident response with severities, roles, and postmortem template.
+    rationale: Consistent incident handling reduces MTTR and drives learning.
+    check:
+      type: file_exists
+      any_of: ["docs/incident-response.md", ".sre/incident-response.md", "runbooks/", "RUNBOOK.md"]
+    remediation: Add an incident-response doc and a blameless postmortem template.
+    mappings:
+      NIST-800-53: ["IR-4", "IR-8"]
+      SOC2: ["CC7.3", "CC7.4"]
+      HIPAA: ["164.308(a)(6)"]
+
+  - id: SRE-OBS-004
+    title: Observability (metrics/logs/traces) is configured as code
+    category: observability
+    severity: high
+    automatable: true
+    description: Dashboards and alerts declared as code and linked to SLOs.
+    rationale: You cannot operate what you cannot observe; config-as-code enables review.
+    check:
+      type: observability_configured
+    remediation: Add observability-as-code (alerts/dashboards) tied to your SLIs.
+    mappings:
+      NIST-800-53: ["AU-6", "SI-4"]
+      SOC2: ["CC7.1", "CC7.2"]
+
+  - id: SRE-CHG-005
+    title: Progressive/safe change management is enforced in CI
+    category: reliability
+    severity: high
+    automatable: true
+    description: Automated deploy pipeline with gated, reversible rollouts.
+    rationale: Most incidents are change-induced; safe rollout limits blast radius.
+    check:
+      type: workflow_present
+      requirement: safe_change_workflow
+    remediation: Add a deployment workflow with staged rollout and automated rollback.
+    mappings:
+      NIST-800-53: ["CM-3", "CM-4"]
+      NIST-SSDF: ["PO.3", "PW.6"]
+      SOC2: ["CC8.1"]
+
+  - id: SRE-DR-006
+    title: Backup and disaster recovery is declared and tested
+    category: reliability
+    severity: medium
+    automatable: true
+    description: RPO/RTO documented with a recovery test cadence.
+    rationale: Untested backups are not backups.
+    check:
+      type: dr_configured
+    remediation: Declare sre.disaster_recovery RPO, RTO, test cadence, and last recovery-test date in .sre/governance.yaml.
+    mappings:
+      NIST-800-53: ["CP-9", "CP-10"]
+      SOC2: ["A1.2"]
+      HIPAA: ["164.308(a)(7)"]
+
+  - id: SRE-TOIL-007
+    title: Toil is tracked and capped
+    category: reliability
+    severity: low
+    automatable: true
+    description: Team declares a toil budget and tracks it.
+    rationale: Capping toil protects engineering capacity for reliability work.
+    check:
+      type: metadata_gte
+      key: sre.toil_budget_pct
+      value: 1
+    remediation: Declare a toil_budget_pct target (e.g., 50) in .sre/governance.yaml.
+    mappings:
+      NIST-800-53: ["PL-2"]
+
+  - id: SRE-ONCALL-008
+    title: On-call rotation and escalation are defined
+    category: reliability
+    severity: medium
+    automatable: true
+    description: A documented, sustainable on-call rotation with escalation paths.
+    rationale: Clear ownership and humane on-call are prerequisites for operability.
+    check:
+      type: metadata_true
+      key: sre.oncall_defined
+    remediation: Declare oncall_defined and link the rotation/escalation policy.
+    mappings:
+      NIST-800-53: ["IR-7"]
+      SOC2: ["CC7.3"]
+
+  # ----------------------------- GOVERNANCE -----------------------------
+  - id: GOV-BP-010
+    title: Protected default branch with no direct pushes
+    category: governance
+    severity: critical
+    automatable: true
+    description: The default branch requires PRs and blocks force-push/deletion.
+    rationale: Branch protection is the baseline integrity control for source.
+    check:
+      type: metadata_true
+      key: governance.branch_protection.enabled
+    remediation: Enable branch protection on the default branch (no direct/force push).
+    mappings:
+      NIST-800-53: ["CM-5", "AC-6"]
+      NIST-SSDF: ["PS.1", "PO.5"]
+      SLSA: ["Source L2"]
+      SOC2: ["CC8.1"]
+
+  - id: GOV-REV-011
+    title: Minimum required reviewers on pull requests
+    category: governance
+    severity: high
+    automatable: true
+    description: PRs require at least N approving reviews before merge.
+    rationale: Peer review catches defects and enforces separation of duties.
+    check:
+      type: metadata_gte
+      key: governance.branch_protection.required_reviewers
+      value: 1
+    remediation: Require at least the profile-mandated number of approving reviewers.
+    mappings:
+      NIST-800-53: ["AC-5", "SA-11"]
+      NIST-SSDF: ["PW.7"]
+      SOC2: ["CC8.1"]
+
+  - id: GOV-CODEOWNERS-012
+    title: CODEOWNERS defines accountable owners
+    category: governance
+    severity: medium
+    automatable: true
+    description: A CODEOWNERS file routes reviews to accountable teams.
+    rationale: Explicit ownership is required for governance at scale.
+    check:
+      type: file_exists
+      any_of: ["CODEOWNERS", ".github/CODEOWNERS", "docs/CODEOWNERS"]
+    remediation: Add a CODEOWNERS file mapping paths to owning teams.
+    mappings:
+      NIST-800-53: ["AC-5", "PS-2"]
+      SOC2: ["CC1.3"]
+
+  - id: GOV-SIGN-013
+    title: Commits/tags are signed and verified
+    category: governance
+    severity: high
+    automatable: true
+    description: Require signed commits to ensure authorship integrity.
+    rationale: Signing defends against commit spoofing and supports provenance.
+    check:
+      type: metadata_true
+      key: governance.require_signed_commits
+    remediation: Require signed commits/tags and enforce verification in CI.
+    mappings:
+      NIST-800-53: ["CM-5", "SI-7"]
+      NIST-SSDF: ["PS.2"]
+      SLSA: ["Provenance L2"]
+
+  # ----------------------------- SECURITY / SUPPLY CHAIN -----------------------------
+  - id: SEC-SECRETS-020
+    title: Secret scanning + push protection is enabled
+    category: security
+    severity: critical
+    automatable: true
+    description: Repository scans for committed secrets and blocks pushes containing them.
+    rationale: Leaked credentials are a top cause of breaches.
+    check:
+      type: metadata_true
+      key: security.secret_scanning
+    remediation: Enable secret scanning and push protection; rotate any exposed secrets.
+    mappings:
+      NIST-800-53: ["IA-5", "SA-15"]
+      NIST-SSDF: ["PW.4"]
+      PCI-DSS: ["3.5", "6.3"]
+
+  - id: SEC-SAST-021
+    title: Static application security testing runs in CI
+    category: security
+    severity: high
+    automatable: true
+    description: SAST/code scanning runs on PRs and the default branch.
+    rationale: Early defect detection lowers cost and risk.
+    check:
+      type: workflow_security_scan
+    remediation: Add a SAST/code-scanning workflow (e.g., CodeQL) gating merges.
+    mappings:
+      NIST-800-53: ["RA-5", "SA-11"]
+      NIST-SSDF: ["PW.8"]
+      PCI-DSS: ["6.3.2"]
+
+  - id: SEC-SCA-022
+    title: Dependency/SCA scanning is enabled
+    category: security
+    severity: high
+    automatable: true
+    description: Software composition analysis flags vulnerable dependencies.
+    rationale: Most code is dependencies; vulnerable transitives are common.
+    check:
+      type: workflow_present
+      requirement: sca_configured
+    remediation: Enable Dependabot/Renovate and fail CI on critical advisories.
+    mappings:
+      NIST-800-53: ["RA-5", "SA-12"]
+      NIST-SSDF: ["PW.4", "RV.1"]
+      SLSA: ["Build L2"]
+
+  - id: SEC-SBOM-023
+    title: SBOM is generated for releases
+    category: security
+    severity: medium
+    automatable: true
+    description: A software bill of materials is produced and published per release.
+    rationale: SBOMs enable rapid impact analysis (e.g., Log4Shell).
+    check:
+      type: workflow_present
+      requirement: sbom_workflow
+    remediation: Add an SBOM generation step (Syft/CycloneDX) to the release workflow.
+    mappings:
+      NIST-800-53: ["SA-8"]
+      NIST-SSDF: ["PS.3"]
+      SLSA: ["Provenance L2"]
+      EO-14028: ["Sec.4"]
+
+  - id: SEC-IAC-024
+    title: Infrastructure-as-Code is scanned
+    category: security
+    severity: medium
+    automatable: true
+    description: IaC misconfiguration scanning runs when IaC is present.
+    rationale: Cloud misconfiguration is a leading breach vector.
+    check:
+      type: workflow_present
+      requirement: iac_workflow
+    remediation: Add an IaC scanner (Checkov/tfsec) to CI for Terraform/K8s/CFN.
+    mappings:
+      NIST-800-53: ["CM-6", "CM-7"]
+      NIST-SSDF: ["PW.5"]
+
+  # ----------------------------- COMPLIANCE / HYGIENE -----------------------------
+  - id: CMP-SECPOL-030
+    title: SECURITY.md vulnerability disclosure policy exists
+    category: compliance
+    severity: medium
+    automatable: true
+    description: A SECURITY.md describes how to report vulnerabilities.
+    rationale: Coordinated disclosure is an industry baseline.
+    check:
+      type: file_exists
+      any_of: ["SECURITY.md", ".github/SECURITY.md", "docs/SECURITY.md"]
+    remediation: Add a SECURITY.md with a disclosure contact and SLA.
+    mappings:
+      NIST-800-53: ["RA-5"]
+      NIST-SSDF: ["RV.1"]
+
+  - id: CMP-LICENSE-031
+    title: License is declared
+    category: compliance
+    severity: low
+    automatable: true
+    description: A LICENSE file declares usage terms.
+    rationale: Legal clarity and supply-chain hygiene.
+    check:
+      type: file_exists
+      any_of: ["LICENSE", "LICENSE.md", "LICENSE.txt", "COPYING"]
+    remediation: Add a LICENSE appropriate to the project and organization policy.
+    mappings:
+      SOC2: ["CC1.1"]
+
+  - id: CMP-README-032
+    title: README documents purpose, ownership, and runbook links
+    category: compliance
+    severity: low
+    automatable: true
+    description: A README gives new engineers the operating context.
+    rationale: Documentation is an operability control.
+    check:
+      type: file_exists
+      any_of: ["README.md", "README.rst", "README"]
+    remediation: Add a README with ownership, architecture, and runbook links.
+    mappings:
+      SOC2: ["CC2.2"]
+
+  - id: CMP-AUDIT-033
+    title: Agent actions are auditable and attributable
+    category: compliance
+    severity: high
+    automatable: true
+    description: Automation (incl. AI agents) must emit an immutable audit trail.
+    rationale: Transparency and accountability for autonomous changes.
+    check:
+      type: audit_log_verified
+      log_path: .sre/audit.jsonl
+      anchor_path: .sre/audit.jsonl.head
+    remediation: Enable audit logging for the SRE Governance Agent (audit.jsonl + provenance).
+    mappings:
+      NIST-800-53: ["AU-2", "AU-3", "AU-12"]
+      SOC2: ["CC7.2"]
+      HIPAA: ["164.312(b)"]

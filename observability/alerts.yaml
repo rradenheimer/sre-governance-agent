@@ -1,0 +1,8 @@
+alerts:
+  - name: Scan availability below objective
+    sli: scan-availability
+    query: successful_scans / total_scans
+    window: 30d
+    threshold: 99.9
+    owner: platform-sre
+    action: Investigate failed governance-scan runs and freeze catalog feature changes until the error budget recovers.

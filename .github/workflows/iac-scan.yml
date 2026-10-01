@@ -1,0 +1,52 @@
+name: IaC Scan
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iac-scan:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow:
+          - sre-governance.yml
+          - policy-validation.yml
+          - iac-scan.yml
+          - release.yml
+          - promote-release.yml
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scan GitHub Actions CI/CD configuration
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/${{ matrix.workflow }}
+          framework: github_actions
+          soft_fail: false
+      - name: Scan CodeQL workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/codeql.yml
+          framework: github_actions
+          soft_fail: false
+      - name: Scan observability workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/scan-observability.yml
+          framework: github_actions
+          soft_fail: false
+      - name: Scan fleet-report workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/sre-governance-fleet.yml
+          framework: github_actions
+          soft_fail: false
