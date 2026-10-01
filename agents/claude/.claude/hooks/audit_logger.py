@@ -51,7 +51,7 @@ def main() -> int:
 
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
-    target = tool_input.get("file_path") or tool_input.get("command", "")[:120] or "-"
+    target = tool_input.get("file_path") or tool_name or "-"
 
     record = {
         "ts": _now(),
