@@ -45,10 +45,20 @@ PROTECTED_WRITE = (".sre/audit.jsonl", ".sre/audit.jsonl.head")
 
 def _blob(tool_input: dict) -> str:
     parts = []
-    for key in ("command", "content", "new_string", "file_text"):
-        v = tool_input.get(key)
-        if isinstance(v, str):
-            parts.append(v)
+
+    def collect(value, key=None):
+        if isinstance(key, str) and key.lower().replace("_", "") in {"oldstring", "oldtext"}:
+            return
+        if isinstance(value, dict):
+            for child_key, child in value.items():
+                collect(child, child_key)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+        elif isinstance(value, str):
+            parts.append(value)
+
+    collect(tool_input)
     return "\n".join(parts)
 
 

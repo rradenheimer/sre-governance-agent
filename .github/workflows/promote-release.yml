@@ -25,6 +25,13 @@ jobs:
           gh release view "$TAG" --json isPrerelease,assets --jq \
             '[.isPrerelease, ([.assets[].name] | index("sre-governance-agent.tar.gz") != null), ([.assets[].name] | index("sre-governance-agent.spdx.json") != null)] | all' |
             grep -qx true
+          CANDIDATE_COMMIT="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" --jq '.target_commitish')"
+          TAG_OBJECT="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq '.object.sha')"
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_OBJECT" --jq '.verification.verified' |
+            grep -qx true
           git fetch origin tag "$TAG"
+          test "$(git rev-parse "$TAG^{tag}")" = "$TAG_OBJECT"
+          TAG_COMMIT="$(git rev-parse "$TAG^{commit}")"
+          test "$TAG_COMMIT" = "$CANDIDATE_COMMIT"
           git merge-base --is-ancestor "$TAG" HEAD
           gh release edit "$TAG" --prerelease=false

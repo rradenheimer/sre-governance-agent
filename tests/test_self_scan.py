@@ -33,12 +33,24 @@ def test_release_and_iac_workflows_have_real_gates():
         Loader=yaml.BaseLoader,
     )
     candidate = release["jobs"]["candidate"]["steps"]
+    candidate_run = next(
+        step["run"] for step in candidate
+        if step.get("name") == "Verify signed release tag targets this commit"
+    )
     promotion = yaml.load(
         (workflows / "promote-release.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,
     )
     promote = promotion["jobs"]["promote"]["steps"]
+    promote_run = next(
+        step["run"] for step in promote
+        if step.get("name") == "Check candidate and promote without rebuilding"
+    )
     assert any("python -m pytest -q" in step.get("run", "") for step in candidate)
+    assert "verification.verified" in promote_run
+    assert "git/tags/$TAG_OBJECT" in promote_run
+    assert 'test "$TAG_COMMIT" = "$CANDIDATE_COMMIT"' in promote_run
+    assert 'test "$(git rev-parse "$TAG^{tag}")" = "$TAG_OBJECT"' in promote_run
     assert any(".verification.verified" in step.get("run", "")
                and "git rev-parse" in step["run"] for step in candidate)
     assert any("git archive" in step.get("run", "") for step in candidate)
@@ -88,10 +100,16 @@ def test_release_and_iac_workflows_have_real_gates():
         Loader=yaml.BaseLoader,
     )
     assert set(iac["jobs"]["iac-scan"]["strategy"]["matrix"]["workflow"]) == {
-        path.name for path in workflows.glob("*.yml")
+        "sre-governance.yml", "policy-validation.yml", "iac-scan.yml",
+        "release.yml", "promote-release.yml",
     }
     steps = iac["jobs"]["iac-scan"]["steps"]
     assert any(step.get("uses", "").startswith("bridgecrewio/checkov-action@")
                and step.get("with", {}).get("framework") == "github_actions"
                and step["with"].get("soft_fail") == "false"
                for step in steps)
+    for workflow in ("codeql.yml", "scan-observability.yml"):
+        step = next(step for step in steps if step.get("with", {}).get("file")
+                    == f".github/workflows/{workflow}")
+        assert step.get("if") == "matrix.workflow == 'iac-scan.yml'"
+        assert step.get("with", {}).get("soft_fail") == "false"

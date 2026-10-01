@@ -30,6 +30,22 @@ def test_secret_guard_blocks_aws_key():
     assert "secret" in r.stderr.lower()
 
 
+def test_secret_guard_blocks_nested_multiedit_replacement():
+    r = _run(SECRET_GUARD, {
+        "tool_name": "MultiEdit",
+        "tool_input": {"edits": [{"old_string": "safe", "new_string": "AKIAIOSFODNN7EXAMPLE"}]},
+    })
+    assert r.returncode == 2
+
+
+def test_secret_guard_ignores_secret_only_in_multiedit_old_text():
+    r = _run(SECRET_GUARD, {
+        "tool_name": "MultiEdit",
+        "tool_input": {"edits": [{"old_string": "AKIAIOSFODNN7EXAMPLE", "new_string": "removed"}]},
+    })
+    assert r.returncode == 0
+
+
 def test_secret_guard_blocks_audit_edit():
     r = _run(SECRET_GUARD, {"tool_name": "Edit",
                             "tool_input": {"file_path": ".sre/audit.jsonl", "new_string": "x"}})

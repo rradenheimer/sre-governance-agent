@@ -45,7 +45,11 @@ class RepoScan:
     def read_text(self, relpath: str) -> str:
         if relpath not in self.files:
             return ""
-        p = self.root / relpath
+        try:
+            p = (self.root / relpath).resolve()
+            p.relative_to(self.root)
+        except (OSError, RuntimeError, ValueError):
+            return ""
         if p.is_file():
             return p.read_text(encoding="utf-8", errors="replace")
         return ""

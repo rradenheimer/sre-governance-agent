@@ -21,13 +21,25 @@ jobs:
           - iac-scan.yml
           - release.yml
           - promote-release.yml
-          - codeql.yml
-          - scan-observability.yml
     steps:
       - uses: actions/checkout@v4
       - name: Scan GitHub Actions CI/CD configuration
         uses: bridgecrewio/checkov-action@v12
         with:
           file: .github/workflows/${{ matrix.workflow }}
+          framework: github_actions
+          soft_fail: false
+      - name: Scan CodeQL workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/codeql.yml
+          framework: github_actions
+          soft_fail: false
+      - name: Scan observability workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/scan-observability.yml
           framework: github_actions
           soft_fail: false

@@ -83,14 +83,19 @@ class AuditLogger:
             return False, "audit log is empty"
         prev = GENESIS_HASH
         for i, line in enumerate(lines, 1):
-            rec = json.loads(line)
-            stored = rec.get("hash", "")
-            event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
-            if rec.get("prev_hash") != prev:
-                return False, f"broken chain at record {i}: prev_hash mismatch"
-            if event.compute_hash() != stored:
-                return False, f"tampered record {i}: hash mismatch"
-            prev = stored
+            try:
+                rec = json.loads(line)
+                if not isinstance(rec, dict):
+                    return False, f"malformed audit record {i}"
+                stored = rec.get("hash", "")
+                event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
+                if rec.get("prev_hash") != prev:
+                    return False, f"broken chain at record {i}: prev_hash mismatch"
+                if event.compute_hash() != stored:
+                    return False, f"tampered record {i}: hash mismatch"
+                prev = stored
+            except (json.JSONDecodeError, TypeError, ValueError, AttributeError, KeyError):
+                return False, f"malformed audit record {i}"
         if not self.anchor_path.exists():
             return False, "audit head anchor is missing"
         try:

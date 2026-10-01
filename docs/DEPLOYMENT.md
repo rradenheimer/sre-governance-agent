@@ -101,7 +101,10 @@ tags.
 The GitHub Actions workflows in `.github/workflows/` are this repository's
 CI/CD configuration as code. **IaC Scan** runs Checkov against them on PRs and
 pushes to `main`, failing on detected misconfigurations. The protected `main`
-branch requires all five matrix scan jobs and the governance scan to pass.
+branch requires all five matrix scan jobs and the governance scan to pass. The
+`iac-scan.yml` matrix context also scans `codeql.yml` and
+`scan-observability.yml`, keeping all seven workflows covered without adding
+unprotected status-check contexts.
 **Policy Validation** also builds the source archive and validates a real
 SPDX SBOM in CI before a release can be proposed. This is not a claim
 that Terraform or Kubernetes infrastructure exists in this repository.

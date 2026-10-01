@@ -44,3 +44,21 @@ def test_git_scans_ignore_untracked_evidence(tmp_path):
     assert scan.has_path("README.md")
     assert not scan.has_path("SECURITY.md")
     assert scan.read_text("SECURITY.md") == ""
+
+
+def test_git_scanner_does_not_read_symlink_outside_repository(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    outside = tmp_path / "outside.yaml"
+    outside.write_text("sensitive: data", encoding="utf-8")
+    link = repo / "evidence.yaml"
+    link.symlink_to(outside)
+    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(repo), "add", "evidence.yaml"],
+        check=True, capture_output=True,
+    )
+
+    scan = scan_repo(repo)
+    assert scan.has_path("evidence.yaml")
+    assert scan.read_text("evidence.yaml") == ""
