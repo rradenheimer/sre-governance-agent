@@ -469,6 +469,8 @@ def _dependabot_update_enabled(item: Any) -> bool:
         for directory in directories
     ):
         return False
+    if item["package-ecosystem"] == "github-actions" and directories != ["/"]:
+        return False
     schedule = item.get("schedule")
     if not isinstance(schedule, dict):
         return False
@@ -480,6 +482,15 @@ def _dependabot_update_enabled(item: Any) -> bool:
 
 
 def _valid_cronjob(expression: str) -> bool:
+    natural_expression = re.fullmatch(
+        r"every (?:day|weekday|weekend|monday|tuesday|wednesday|thursday|friday|saturday|sunday)"
+        r"(?: at (?:[1-9]|1[0-2])(?::[0-5]\d)?\s?(?:am|pm)|"
+        r" at (?:[01]?\d|2[0-3]):[0-5]\d)",
+        expression.strip(),
+        re.IGNORECASE,
+    )
+    if natural_expression:
+        return True
     limits = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
     fields = expression.split()
     return len(fields) == len(limits) and all(

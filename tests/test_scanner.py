@@ -178,6 +178,22 @@ jobs:
 
     dependabot.write_text(
         "version: 2\nupdates:\n"
+        "  - package-ecosystem: github-actions\n"
+        "    directory: /workflows\n"
+        "    schedule:\n"
+        "      interval: weekly\n",
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("/workflows", "/"),
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
         "  - package-ecosystem: mix\n"
         "    directories: [/, /packages/*]\n"
         "    schedule:\n"
@@ -186,6 +202,33 @@ jobs:
     )
     assert has_sca_configuration(scan_repo(tmp_path))
 
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: mix\n"
+        "    directories: [/, /packages/*]\n"
+        "    schedule:\n"
+        "      interval: cron\n"
+        '      cronjob: "every day at 5pm"\n',
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace(
+            "every day at 5pm", "every invalid schedule",
+        ),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: mix\n"
+        "    directories: [/, /packages/*]\n"
+        "    schedule:\n"
+        "      interval: quarterly\n",
+        encoding="utf-8",
+    )
     dependabot.write_text(
         dependabot.read_text(encoding="utf-8").replace("package-ecosystem: mix", "package-ecosystem: pipenv"),
         encoding="utf-8",
