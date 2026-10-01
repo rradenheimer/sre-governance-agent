@@ -65,11 +65,13 @@ containing the reports; otherwise it uses `fleet-artifacts`.
 - Track: mean compliance score by business unit, # repos below profile minimum,
   top failing controls, time-to-remediate.
 
-The governance workflow restores the latest completed audit-chain artifact for
-the same branch before scanning, serializes runs for that branch, and uploads the
-updated chain for the next run. Configure Actions artifact retention to match the
-audit policy; export artifacts to an approved durable archive when platform
-retention limits do not cover the required period.
+On pushes to protected `main`, the governance workflow restores the latest
+completed audit-chain artifact from a prior `main` push before scanning, then
+uploads the updated chain for the next push. Pull-request and scheduled scans
+start from the checked-out audit chain and do not restore run-generated artifacts.
+Configure Actions artifact retention to match the audit policy; export artifacts
+to an approved durable archive when platform retention limits do not cover the
+required period.
 
 ## Enforcing the gate (defense in depth)
 
