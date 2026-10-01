@@ -1,0 +1,14 @@
+# Declared governance posture (attested by the team; verified in CI via GitHub API).
+governance:
+  branch_protection:
+    enabled: true
+    required_reviewers: 2
+  require_signed_commits: true
+  audit_logging: true
+security:
+  secret_scanning: true
+sre:
+  error_budget_policy_defined: true
+  dr_tested: true
+  toil_budget_pct: 50
+  oncall_defined: true
