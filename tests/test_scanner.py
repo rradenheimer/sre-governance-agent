@@ -388,5 +388,8 @@ jobs:
     renovate.write_text('{"enabledManagers": ["bundler"]}', encoding="utf-8")
     assert has_sca_configuration(scan_repo(tmp_path))
 
+    renovate.write_text('{"enabledManagers": ["mix"]}', encoding="utf-8")
+    assert has_sca_configuration(scan_repo(tmp_path))
+
     renovate.write_text('{"enabledManagers": ["not-a-manager"]}', encoding="utf-8")
     assert not has_sca_configuration(scan_repo(tmp_path))

@@ -30,7 +30,7 @@ _RENOVATE_MANAGERS = {
     "devcontainer", "docker-compose", "dockerfile", "drone", "flux", "github-actions",
     "gitlabci", "gomod", "gradle", "gradle-wrapper", "helm-values", "helmv3",
     "kubernetes", "maven", "npm", "nuget", "pep621", "pip_requirements", "pip_setup",
-    "pipenv", "poetry", "pre-commit", "regex", "repology", "sbt", "swift",
+    "mix", "pipenv", "poetry", "pre-commit", "regex", "repology", "sbt", "swift",
     "terraform", "terragrunt", "vscode", "woodpecker",
 }
 
