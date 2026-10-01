@@ -70,3 +70,26 @@ settings in GitHub before declaring them true, and periodically recheck for drif
 All changes are PRs in version control and fully revertible. Disabling the agent
 is removing a workflow — the deterministic engine has no side effects beyond
 reports and the append-only audit log.
+
+## Staged GitHub Releases
+
+The agent is distributed as a source archive, not published to PyPI. After
+review and merge to `main`, dispatch **Staged GitHub Release** from `main`
+with `stage: candidate` and the exact value in `VERSION`. The workflow
+validates the catalog, runs tests and a commercial scan, builds a source
+archive, generates an SPDX SBOM from that archive, and publishes both as
+assets of a prerelease. It refuses to overwrite an existing release.
+
+Inspect and test the candidate assets before manually dispatching the workflow
+again with `stage: promote` and the same version. Promotion requires the
+candidate to be a prerelease, requires both archive and SBOM assets, and
+checks that the tag is an ancestor of the current `main` before publishing
+the already-built artifacts. Promotion does not rebuild. If a release must be
+withdrawn, mark it as a prerelease in GitHub, stop distributing the affected
+version, and ship a reviewed fix under a new version; do not rewrite release
+tags.
+
+The GitHub Actions workflows in `.github/workflows/` are this repository's
+CI/CD configuration as code. **IaC Scan** runs Checkov against them on PRs and
+pushes to `main`, failing on detected misconfigurations. This is not a claim
+that Terraform or Kubernetes infrastructure exists in this repository.
