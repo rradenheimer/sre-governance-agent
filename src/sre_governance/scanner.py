@@ -26,7 +26,7 @@ _WORKFLOW_GLOBS = (".github/workflows/*.yml", ".github/workflows/*.yaml")
 _METADATA_PATHS = (".sre/governance.yaml", ".sre/governance.yml")
 _RENOVATE_MANAGERS = {
     "ansible", "argocd", "asdf", "azure-pipelines", "bazel", "bitbucket-pipelines",
-    "buildkite", "cargo", "circleci", "cloudbuild", "cocoapods", "composer",
+    "buildkite", "bundler", "cargo", "circleci", "cloudbuild", "cocoapods", "composer",
     "devcontainer", "docker-compose", "dockerfile", "drone", "flux", "github-actions",
     "gitlabci", "gomod", "gradle", "gradle-wrapper", "helm-values", "helmv3",
     "kubernetes", "maven", "npm", "nuget", "pep621", "pip_requirements", "pip_setup",
@@ -455,7 +455,10 @@ def _dependabot_update_enabled(item: Any) -> bool:
         "maven", "mix", "nix", "npm", "nuget", "opentofu", "pip", "pre-commit",
         "pub", "rust-toolchain", "sbt", "swift", "terraform", "uv", "vcpkg",
     }
-    if not isinstance(item, dict) or item.get("package-ecosystem") not in ecosystems:
+    if not isinstance(item, dict):
+        return False
+    ecosystem = item.get("package-ecosystem")
+    if not isinstance(ecosystem, str) or ecosystem not in ecosystems:
         return False
     if "directory" in item and "directories" not in item:
         directories = [item["directory"]]
@@ -469,12 +472,14 @@ def _dependabot_update_enabled(item: Any) -> bool:
         for directory in directories
     ):
         return False
-    if item["package-ecosystem"] == "github-actions" and directories != ["/"]:
+    if ecosystem == "github-actions" and directories != ["/"]:
         return False
     schedule = item.get("schedule")
     if not isinstance(schedule, dict):
         return False
     interval = schedule.get("interval")
+    if not isinstance(interval, str):
+        return False
     if interval in {"daily", "weekly", "monthly", "quarterly", "semiannually", "yearly"}:
         return True
     return interval == "cron" and isinstance(schedule.get("cronjob"), str) \

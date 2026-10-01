@@ -214,9 +214,39 @@ jobs:
     assert has_sca_configuration(scan_repo(tmp_path))
 
     dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("package-ecosystem: mix", "package-ecosystem: hex"),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("package-ecosystem: hex", "package-ecosystem: mix"),
+        encoding="utf-8",
+    )
+    dependabot.write_text(
         dependabot.read_text(encoding="utf-8").replace(
             "every day at 5pm", "every invalid schedule",
         ),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: [pip]\n"
+        "    directory: /\n"
+        "    schedule:\n"
+        "      interval: weekly\n",
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        "version: 2\nupdates:\n"
+        "  - package-ecosystem: pip\n"
+        "    directory: /\n"
+        "    schedule:\n"
+        "      interval: [weekly]\n",
         encoding="utf-8",
     )
     assert not has_sca_configuration(scan_repo(tmp_path))
@@ -354,6 +384,9 @@ jobs:
 
     renovate.write_text('{"extends": ["made-up-config"]}', encoding="utf-8")
     assert not has_sca_configuration(scan_repo(tmp_path))
+
+    renovate.write_text('{"enabledManagers": ["bundler"]}', encoding="utf-8")
+    assert has_sca_configuration(scan_repo(tmp_path))
 
     renovate.write_text('{"enabledManagers": ["not-a-manager"]}', encoding="utf-8")
     assert not has_sca_configuration(scan_repo(tmp_path))
