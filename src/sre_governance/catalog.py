@@ -9,6 +9,7 @@ import yaml
 
 VALID_SEVERITIES = {"critical", "high", "medium", "low"}
 VALID_STATUSES = {"mandatory", "recommended", "not_applicable"}
+VALID_AUTONOMY = {"suggest_only", "propose_pr", "never"}
 
 
 @dataclass(frozen=True)
@@ -93,14 +94,20 @@ def load_profile(path: str | Path) -> Profile:
     enforcement = raw.get("enforcement", "warning")
     if enforcement not in {"blocking", "warning"}:
         raise ValueError(f"Invalid enforcement '{enforcement}' in {path}")
+    ai_autonomy = raw.get("ai_autonomy", "suggest_only")
+    if not isinstance(ai_autonomy, str) or ai_autonomy not in VALID_AUTONOMY:
+        raise ValueError(f"Invalid ai_autonomy '{ai_autonomy}' in {path}")
+    require_human_approval = raw.get("require_human_approval", True)
+    if not isinstance(require_human_approval, bool):
+        raise ValueError(f"require_human_approval must be a boolean in {path}")
     return Profile(
         profile=raw["profile"],
         display_name=raw.get("display_name", raw["profile"]),
         description=raw.get("description", "").strip(),
         baseline=raw.get("baseline", "standard"),
         enforcement=enforcement,
-        ai_autonomy=raw.get("ai_autonomy", "suggest_only"),
-        require_human_approval=bool(raw.get("require_human_approval", True)),
+        ai_autonomy=ai_autonomy,
+        require_human_approval=require_human_approval,
         frameworks=list(raw.get("frameworks", [])),
         thresholds=raw.get("thresholds", {}) or {},
         default_status=default_status,

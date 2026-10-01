@@ -24,6 +24,15 @@ import yaml
 _IGNORE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".mypy_cache"}
 _WORKFLOW_GLOBS = (".github/workflows/*.yml", ".github/workflows/*.yaml")
 _METADATA_PATHS = (".sre/governance.yaml", ".sre/governance.yml")
+_RENOVATE_MANAGERS = {
+    "ansible", "argocd", "asdf", "azure-pipelines", "bazel", "bitbucket-pipelines",
+    "buildkite", "cargo", "circleci", "cloudbuild", "cocoapods", "composer",
+    "devcontainer", "docker-compose", "dockerfile", "drone", "flux", "github-actions",
+    "gitlabci", "gomod", "gradle", "gradle-wrapper", "helm-values", "helmv3",
+    "kubernetes", "maven", "npm", "nuget", "pep621", "pip_requirements", "pip_setup",
+    "pipenv", "poetry", "pre-commit", "regex", "repology", "sbt", "swift",
+    "terraform", "terragrunt", "vscode", "woodpecker",
+}
 
 
 @dataclass
@@ -391,12 +400,19 @@ def has_sca_configuration(scan: RepoScan) -> bool:
             continue
         if path.endswith(("dependabot.yml", "dependabot.yaml")):
             updates = data.get("updates") if isinstance(data, dict) else None
-            configured = isinstance(updates, list) and any(
+            configured = isinstance(data, dict) and data.get("version") == 2 \
+                and isinstance(updates, list) and any(
                 isinstance(item, dict)
                 and isinstance(item.get("package-ecosystem"), str)
-                and item["package-ecosystem"].strip()
+                and item["package-ecosystem"] in {
+                    "bundler", "cargo", "composer", "devcontainers", "docker",
+                    "docker-compose", "dotnet-sdk", "elm", "gitsubmodule",
+                    "github-actions", "gomod", "gradle", "helm", "maven", "npm",
+                    "nuget", "pip", "pipenv", "pub", "swift", "terraform",
+                    "uv", "vcpkg",
+                }
                 and isinstance(item.get("directory"), str)
-                and item["directory"].strip()
+                and item["directory"].startswith("/")
                 and isinstance(item.get("schedule"), dict)
                 and item["schedule"].get("interval") in {"daily", "weekly", "monthly"}
                 for item in updates
@@ -413,38 +429,58 @@ def has_sca_configuration(scan: RepoScan) -> bool:
     for workflow in scan.workflows:
         if "pull_request" not in _workflow_triggers(workflow):
             continue
-        for step in _workflow_steps(workflow):
-            uses = str(step.get("uses", "")).lower()
-            config = step.get("with", {})
-            if uses.startswith("actions/dependency-review-action@") \
-                    and isinstance(config, dict) \
-                    and str(config.get("fail-on-severity", "")).lower() == "critical":
-                return True
-            if uses.startswith("aquasecurity/trivy-action@") and isinstance(config, dict) \
-                    and str(config.get("severity", "")).upper().find("CRITICAL") >= 0 \
-                    and str(config.get("exit-code", "")) == "1":
-                return True
-            run = str(step.get("run", ""))
-            if _commands(
-                run,
-                r"^\s*(?:npm\s+audit\s+--audit-level=critical|pip-audit|"
-                r"snyk\s+test\s+--severity-threshold=critical|osv-scanner)\b",
-            ):
-                return True
+        jobs = workflow.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        for job in jobs.values():
+            if not isinstance(job, dict) or _continues_on_error(job):
+                continue
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            for step in steps:
+                if not isinstance(step, dict) or _continues_on_error(step):
+                    continue
+                uses = str(step.get("uses", "")).lower()
+                config = step.get("with", {})
+                if uses.startswith("actions/dependency-review-action@") \
+                        and isinstance(config, dict) \
+                        and str(config.get("fail-on-severity", "")).lower() == "critical":
+                    return True
+                if uses.startswith("aquasecurity/trivy-action@") and isinstance(config, dict) \
+                        and "CRITICAL" in str(config.get("severity", "")).upper() \
+                        and str(config.get("exit-code", "")) == "1":
+                    return True
+                run = str(step.get("run", ""))
+                if _commands(
+                    run,
+                    r"^\s*(?:npm\s+audit\s+--audit-level=critical|pip-audit|"
+                    r"snyk\s+test\s+--severity-threshold=critical|osv-scanner)\b",
+                ):
+                    return True
     return False
 
 
+def _continues_on_error(config: dict[str, Any]) -> bool:
+    return "continue-on-error" in config \
+        and str(config["continue-on-error"]).strip().lower() != "false"
+
+
 def _renovate_enabled(data: Any) -> bool:
-    if not isinstance(data, dict) or data.get("enabled") is False:
+    if not isinstance(data, dict) or (
+        "enabled" in data and not isinstance(data["enabled"], bool)
+    ) or data.get("enabled") is False:
         return False
     managers = data.get("enabledManagers")
     if isinstance(managers, list) and any(
-        isinstance(manager, str) and manager.strip() for manager in managers
+        isinstance(manager, str) and manager in _RENOVATE_MANAGERS
+        for manager in managers
     ):
         return True
     extends = data.get("extends")
     if isinstance(extends, list) and any(
-        isinstance(preset, str) and preset.strip() for preset in extends
+        preset in {"config:recommended", "config:best-practices"}
+        for preset in extends if isinstance(preset, str)
     ):
         return True
     rules = data.get("packageRules")

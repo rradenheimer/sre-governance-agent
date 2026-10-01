@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from sre_governance.catalog import load_catalog, load_profiles
 from sre_governance.engine import CHECKS
 
@@ -45,3 +47,18 @@ def test_federal_is_strictest():
     assert fed.thresholds["min_compliance_score"] > com.thresholds["min_compliance_score"]
     assert fed.thresholds["required_reviewers"] >= com.thresholds["required_reviewers"]
     assert fed.enforcement == "blocking"
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("ai_autonomy", "suggest-only"),
+        ("require_human_approval", '"false"'),
+    ],
+)
+def test_profile_rejects_invalid_autonomy_and_approval_values(tmp_path, field, value):
+    profile = tmp_path / "invalid.yaml"
+    profile.write_text(f"profile: test\n{field}: {value}\n", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        load_profiles(tmp_path)

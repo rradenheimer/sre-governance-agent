@@ -51,6 +51,11 @@ security/supply-chain (secret scanning, SAST, SCA, SBOM, IaC), and compliance
 hygiene (SECURITY.md, license, README, **AI audit trail**). Each control maps to
 frameworks — see [docs/FRAMEWORK-CROSSWALK.md](docs/FRAMEWORK-CROSSWALK.md).
 
+The catalog contains 21 controls; this does not mean every scan passes all 21.
+The repository's release workflows gate and promote artifacts but do not deploy
+workloads with staged rollout and rollback, so `SRE-CHG-005` correctly remains
+failing until such a deployment workflow is added.
+
 **Evidence boundary:** Checks of remote hosting settings use declarations in
 `.sre/governance.yaml`, not live GitHub API evidence. A PASS for branch protection,
 reviewers, signing, or secret scanning is an attestation, not independent

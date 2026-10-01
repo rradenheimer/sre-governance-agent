@@ -72,7 +72,7 @@ def test_read_only_mode_does_not_grant_editing():
         ROOT / "agents" / "copilot" / ".github" / "chatmodes" / "sre-governance.chatmode.md"
     ).read_text(encoding="utf-8")
 
-    assert settings["permissions"]["defaultMode"] != "acceptEdits"
+    assert settings["permissions"]["defaultMode"] == "default"
     assert "editFiles" not in chatmode.split("---", 2)[1]
 
 

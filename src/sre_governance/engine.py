@@ -6,7 +6,7 @@ overall Assessment (score + policy gate). No AI, no network, no randomness.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -166,14 +166,29 @@ def _check_dr_configured(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, 
     }:
         return False, "sre.disaster_recovery.test_cadence must declare a supported recovery-test cadence"
     tested = recovery.get("last_tested")
-    if isinstance(tested, date):
-        return True, "RPO, RTO, recovery-test cadence, and last test date are declared"
-    if not isinstance(tested, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", tested):
+    if isinstance(tested, datetime):
+        tested = tested.date()
+    elif isinstance(tested, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2}", tested):
+        try:
+            tested = date.fromisoformat(tested)
+        except ValueError:
+            tested = None
+    if not isinstance(tested, date):
         return False, "sre.disaster_recovery.last_tested must be an ISO date"
-    try:
-        date.fromisoformat(tested)
-    except ValueError:
-        return False, "sre.disaster_recovery.last_tested must be an ISO date"
+    cadence_days = {
+        "weekly": 7,
+        "monthly": 31,
+        "quarterly": 92,
+        "annually": 366,
+    }[recovery["test_cadence"]]
+    age_days = (date.today() - tested).days
+    if age_days < 0:
+        return False, "sre.disaster_recovery.last_tested cannot be in the future"
+    if age_days > cadence_days:
+        return False, (
+            "sre.disaster_recovery.last_tested is older than the "
+            f"{recovery['test_cadence']} test cadence ({cadence_days} days)"
+        )
     return True, "RPO, RTO, recovery-test cadence, and last test date are declared"
 
 

@@ -1,4 +1,5 @@
 from dataclasses import replace
+from datetime import date, timedelta
 from pathlib import Path
 
 from sre_governance.catalog import load_catalog, load_profiles
@@ -131,13 +132,37 @@ def test_disaster_recovery_requires_structured_evidence():
                 "rpo": "4h",
                 "rto": "8h",
                 "test_cadence": "quarterly",
-                "last_tested": "2026-10-01",
+                "last_tested": date.today().isoformat(),
             },
         },
     })
     assessment = evaluate(scan, catalog, profiles["commercial"])
     dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
     assert dr.status == PASS
+
+    scan = merge_api_metadata(scan, {
+        "sre": {
+            "disaster_recovery": {
+                "last_tested": (date.today() + timedelta(days=1)).isoformat(),
+            },
+        },
+    })
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
+    assert dr.status == FAIL
+    assert "future" in dr.reason
+
+    scan = merge_api_metadata(scan, {
+        "sre": {
+            "disaster_recovery": {
+                "last_tested": (date.today() - timedelta(days=93)).isoformat(),
+            },
+        },
+    })
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
+    assert dr.status == FAIL
+    assert "quarterly test cadence" in dr.reason
 
     scan = merge_api_metadata(scan, {
         "sre": {"disaster_recovery": {"rpo": "0h"}},

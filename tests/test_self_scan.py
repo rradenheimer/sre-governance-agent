@@ -104,6 +104,11 @@ def test_release_and_iac_workflows_have_real_gates():
             if step.get("name") == "Comment report on PR"
         )
         assert comment.get("continue-on-error") == "true"
+        checkout = next(
+            step for step in governance["jobs"]["governance-scan"]["steps"]
+            if step.get("uses", "").startswith("actions/checkout@")
+        )
+        assert checkout.get("with", {}).get("persist-credentials") == "false"
         assert any(step.get("name") == "Restore prior audit chain"
                    for step in governance["jobs"]["governance-scan"]["steps"])
         restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]

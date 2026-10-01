@@ -177,6 +177,51 @@ jobs:
     assert has_sca_configuration(scan_repo(tmp_path))
 
     workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "fail-on-severity: critical",
+            "fail-on-severity: critical\n        continue-on-error: true",
+        ),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "        continue-on-error: true", "        continue-on-error: false",
+        ),
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "  test:\n", "  test:\n    continue-on-error: true\n",
+        ),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    workflow.write_text(
+        workflow.read_text(encoding="utf-8").replace(
+            "    continue-on-error: true", "    continue-on-error: false",
+        ),
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace(
+            "package-ecosystem: pip", "package-ecosystem: unknown",
+        ),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("unknown", "pip"),
+        encoding="utf-8",
+    )
+    workflow.write_text(
         workflow.read_text(encoding="utf-8").replace("critical", "high"),
         encoding="utf-8",
     )
@@ -203,4 +248,10 @@ jobs:
     assert has_sca_configuration(scan_repo(tmp_path))
 
     renovate.write_text('{"enabledManagers": []}', encoding="utf-8")
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    renovate.write_text('{"extends": ["made-up-config"]}', encoding="utf-8")
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    renovate.write_text('{"enabledManagers": ["not-a-manager"]}', encoding="utf-8")
     assert not has_sca_configuration(scan_repo(tmp_path))
