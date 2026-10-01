@@ -56,6 +56,17 @@ frameworks — see [docs/FRAMEWORK-CROSSWALK.md](docs/FRAMEWORK-CROSSWALK.md).
 reviewers, signing, or secret scanning is an attestation, not independent
 verification. Verify remote settings separately before asserting compliance.
 
+For this repository, the commercial profile targets at least 80%. The
+declarations for `GOV-BP-010` (NIST 800-53 CM-5/AC-6, SSDF PS.1/PO.5,
+SLSA Source L2, SOC 2 CC8.1), `GOV-REV-011`, and `SEC-SECRETS-020`
+(NIST 800-53 IA-5/SA-15, SSDF PW.4, PCI-DSS 3.5/6.3) were updated after
+verifying the corresponding GitHub settings on 2026-10-01. To recheck,
+use an account with repository administration access to inspect the default
+branch protection (PR reviews, status checks, no force pushes or deletions,
+admin enforcement) and the repository's **Security and analysis** settings
+(secret scanning and push protection). A local scan alone cannot detect
+subsequent remote-setting drift.
+
 ## Quick start
 
 ```bash

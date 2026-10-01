@@ -1,14 +1,15 @@
 # Declared governance posture for the SRE Governance Agent repository itself.
 # These are declarations, not evidence of remote GitHub settings. Update only
 # after verifying the corresponding settings and practices.
+# GitHub main protection and secret-scanning settings verified 2026-10-01.
 governance:
   branch_protection:
-    enabled: false
-    required_reviewers: 0
+    enabled: true
+    required_reviewers: 1
   require_signed_commits: false
   audit_logging: true
 security:
-  secret_scanning: false
+  secret_scanning: true
 sre:
   error_budget_policy_defined: true
   dr_tested: true
