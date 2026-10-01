@@ -42,7 +42,20 @@ not code.
 
 ## Fleet reporting
 
-Each repo emits `sre-governance-report.json`. Aggregate them:
+Each repo emits `sre-governance-report.json`. Aggregate the fleet with the
+bundled script (no extra services required):
+
+```bash
+# Aggregate downloaded CI artifacts (one JSON per repo)
+python scripts/fleet_aggregate.py aggregate --reports-dir ./artifacts --out fleet-reports
+
+# Or scan a directory that contains many repos
+python scripts/fleet_aggregate.py scan --repos-root /path/to/org --out fleet-reports
+```
+
+It produces `fleet-summary.json`, `fleet-summary.csv`, and `fleet-dashboard.md`.
+The `SRE Governance Fleet Report` workflow (`sre-governance-fleet.yml`) runs this
+weekly and publishes the dashboard to the job summary.
 
 - Upload the JSON artifact to a data lake / warehouse (one row per control per
   repo per run) for org-wide dashboards and trend lines.
@@ -55,6 +68,18 @@ the same branch before scanning, serializes runs for that branch, and uploads th
 updated chain for the next run. Configure Actions artifact retention to match the
 audit policy; export artifacts to an approved durable archive when platform
 retention limits do not cover the required period.
+
+## Enforcing the gate (defense in depth)
+
+Enforcement happens at multiple layers that read the same deterministic report:
+
+1. The engine's exit code (`enforcement: blocking` fails CI).
+2. The OPA/Rego gate — run locally or in CI with
+   `python scripts/opa_gate.py --report <json>` (uses `conftest`/`opa` if
+   installed, else a Python fallback), or `conftest test ... --policy policies/opa`.
+3. Branch protection requiring the governance check.
+
+`opa test policies/opa` unit-tests the Rego itself.
 
 ## Verify remote settings separately
 

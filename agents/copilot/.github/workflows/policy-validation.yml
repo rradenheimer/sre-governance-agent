@@ -42,3 +42,8 @@ jobs:
           sudo install /tmp/conftest /usr/local/bin/conftest
       - name: Verify OPA policies
         run: conftest verify --policy policies/opa
+      - name: Policy gate self-check (sample report)
+        run: |
+          PYTHONPATH=src python -m sre_governance.cli scan --repo . \
+            --profile commercial --format json --out sre-reports --audit .sre/audit.jsonl
+          python scripts/opa_gate.py --report sre-reports/sre-governance-report.json

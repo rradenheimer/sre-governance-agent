@@ -43,3 +43,10 @@ jobs:
           file: .github/workflows/scan-observability.yml
           framework: github_actions
           soft_fail: false
+      - name: Scan fleet-report workflow in required IaC context
+        if: matrix.workflow == 'iac-scan.yml'
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          file: .github/workflows/sre-governance-fleet.yml
+          framework: github_actions
+          soft_fail: false

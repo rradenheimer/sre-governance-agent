@@ -17,8 +17,9 @@ Always run these and ensure they pass:
 
 ```bash
 python -m sre_governance.cli validate-config      # catalog + profiles sane
-python -m pytest -q                                # engine tests green
-python -m sre_governance.cli scan --repo . --profile commercial   # self-scan
+python -m pytest -q                                # engine + script tests green
+python -m sre_governance.cli scan --repo . --profile commercial --format json   # self-scan
+python scripts/opa_gate.py --report sre-reports/sre-governance-report.json       # policy gate
 ```
 
 ## Hard rules
