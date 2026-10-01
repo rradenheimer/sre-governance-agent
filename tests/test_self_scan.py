@@ -113,8 +113,13 @@ def test_release_and_iac_workflows_have_real_gates():
                    for step in governance["jobs"]["governance-scan"]["steps"])
         restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]
                        if step.get("name") == "Restore prior audit chain")
+        assert restore["if"] == (
+            "(github.event_name == 'push' && github.ref == 'refs/heads/main') "
+            "|| github.event_name == 'schedule'"
+        )
         assert "sre-governance-reports" in restore["run"]
         assert "--limit 100" in restore["run"]
+        assert '.event == "push" or .event == "schedule"' in restore["run"]
         assert "for PRIOR_RUN in $PRIOR_RUNS" in restore["run"]
         assert "verify-audit" in restore["run"]
         assert "No valid prior audit artifact found" in restore["run"]

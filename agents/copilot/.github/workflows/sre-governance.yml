@@ -45,12 +45,14 @@ jobs:
         run: pip install pyyaml
 
       - name: Restore prior audit chain
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
           PRIOR_RUNS="$(gh run list --workflow sre-governance.yml --branch "$BRANCH" \
-            --status completed --limit 100 --json databaseId --jq '.[].databaseId')"
+            --status completed --limit 100 --json databaseId,event \
+            --jq '[.[] | select(.event == "push" or .event == "schedule")] | .[].databaseId')"
           if [ -n "$PRIOR_RUNS" ]; then
             RESTORED=false
             for PRIOR_RUN in $PRIOR_RUNS; do
