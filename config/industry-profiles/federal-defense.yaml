@@ -1,0 +1,29 @@
+# Industry Profile: Federal / Defense
+# Highest assurance. Maps to FedRAMP, NIST 800-53 (High), NIST SSDF, EO 14028, SLSA.
+# Enforcement is BLOCKING: a failed mandatory control fails the pipeline / blocks merge.
+profile: federal-defense
+display_name: Federal / Defense
+description: >
+  For federal agencies, DoD, and contractors handling CUI/classified-adjacent
+  workloads. Assumes an authorizing official (AO), continuous monitoring, and
+  change-control boards. AI automation is strictly human-in-the-loop with full
+  audit provenance; the agent never applies changes autonomously.
+baseline: high
+enforcement: blocking
+ai_autonomy: suggest_only          # suggest_only | propose_pr | never
+require_human_approval: true
+frameworks: [NIST-800-53-High, FedRAMP, NIST-SSDF, EO-14028, SLSA, CMMC]
+thresholds:
+  required_reviewers: 2
+  min_compliance_score: 95
+  max_critical_failures: 0
+  max_high_failures: 0
+default_status: mandatory           # any catalog control not listed below
+controls:
+  SRE-TOIL-007: recommended
+  CMP-LICENSE-031: recommended
+  CMP-README-032: recommended
+data_handling:
+  allow_external_ai_calls: false    # on-prem / FedRAMP-authorized models only
+  redact_secrets_in_prompts: true
+  retain_audit_days: 2555           # ~7 years

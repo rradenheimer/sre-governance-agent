@@ -1,0 +1,5 @@
+# Runtime dependency for the deterministic engine.
+PyYAML>=6.0
+
+# Development / CI only:
+pytest>=7.4
