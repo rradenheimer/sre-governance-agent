@@ -9,11 +9,6 @@ on:
   schedule:
     - cron: "0 8 * * 1"   # weekly Monday 08:00 UTC
   workflow_dispatch:
-    inputs:
-      reports_dir:
-        description: Directory containing per-repo governance JSON reports
-        required: false
-        default: fleet-artifacts
 
 permissions:
   contents: read
@@ -30,9 +25,10 @@ jobs:
         run: pip install pyyaml
 
       - name: Aggregate fleet
+        env:
+          SRE_GOVERNANCE_REPORTS_DIR: ${{ vars.SRE_GOVERNANCE_REPORTS_DIR }}
         run: |
-          DIR="${{ github.event.inputs.reports_dir }}"
-          DIR="${DIR:-fleet-artifacts}"
+          DIR="${SRE_GOVERNANCE_REPORTS_DIR:-fleet-artifacts}"
           if [ ! -d "$DIR" ]; then
             echo "::warning::No reports directory '$DIR' found; nothing to aggregate."
             exit 0

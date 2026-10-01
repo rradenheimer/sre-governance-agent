@@ -160,3 +160,20 @@ def test_release_and_iac_workflows_have_real_gates():
                     == f".github/workflows/{workflow}")
         assert step.get("if") == "matrix.workflow == 'iac-scan.yml'"
         assert step.get("with", {}).get("soft_fail") == "false"
+
+
+def test_fleet_workflow_dispatch_has_no_user_inputs():
+    for path in (
+        ROOT / ".github" / "workflows" / "sre-governance-fleet.yml",
+        ROOT / "agents" / "copilot" / ".github" / "workflows" / "sre-governance-fleet.yml",
+    ):
+        workflow = yaml.load(path.read_text(encoding="utf-8"), Loader=yaml.BaseLoader)
+        assert workflow["on"]["workflow_dispatch"] in ("", None, {})
+        aggregate = next(
+            step for step in workflow["jobs"]["fleet-report"]["steps"]
+            if step.get("name") == "Aggregate fleet"
+        )
+        assert aggregate["env"]["SRE_GOVERNANCE_REPORTS_DIR"] == (
+            "${{ vars.SRE_GOVERNANCE_REPORTS_DIR }}"
+        )
+        assert "${SRE_GOVERNANCE_REPORTS_DIR:-fleet-artifacts}" in aggregate["run"]

@@ -55,7 +55,9 @@ python scripts/fleet_aggregate.py scan --repos-root /path/to/org --out fleet-rep
 
 It produces `fleet-summary.json`, `fleet-summary.csv`, and `fleet-dashboard.md`.
 The `SRE Governance Fleet Report` workflow (`sre-governance-fleet.yml`) runs this
-weekly and publishes the dashboard to the job summary.
+weekly and publishes the dashboard to the job summary. Optionally set the
+repository variable `SRE_GOVERNANCE_REPORTS_DIR` to select the directory
+containing the reports; otherwise it uses `fleet-artifacts`.
 
 - Upload the JSON artifact to a data lake / warehouse (one row per control per
   repo per run) for org-wide dashboards and trend lines.
