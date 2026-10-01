@@ -47,11 +47,13 @@ jobs:
         run: |
           jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length > 0)' \
             dist/sre-governance-agent.spdx.json
-      - name: Lint OPA policies (if conftest present)
-        continue-on-error: true
+      - name: Install Conftest
         run: |
-          if command -v conftest >/dev/null 2>&1; then
-            conftest verify --policy policies/opa || true
-          else
-            echo "conftest not installed; skipping OPA verify"
-          fi
+          version=0.56.0
+          curl --fail --location --silent --show-error \
+            "https://github.com/open-policy-agent/conftest/releases/download/v${version}/conftest_${version}_Linux_x86_64.tar.gz" \
+            --output /tmp/conftest.tar.gz
+          tar -xzf /tmp/conftest.tar.gz -C /tmp conftest
+          sudo install /tmp/conftest /usr/local/bin/conftest
+      - name: Verify OPA policies
+        run: conftest verify --policy policies/opa

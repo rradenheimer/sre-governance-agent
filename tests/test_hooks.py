@@ -42,6 +42,16 @@ def test_secret_guard_blocks_force_push():
     assert r.returncode == 2
 
 
+def test_secret_guard_blocks_bash_sensitive_path_reads():
+    for command in (
+        "cat .env",
+        "python -c 'print(open(\".aws/credentials\").read())'",
+        "head -n 1 ~/.ssh/id_rsa",
+    ):
+        r = _run(SECRET_GUARD, {"tool_name": "Bash", "tool_input": {"command": command}})
+        assert r.returncode == 2, command
+
+
 def test_audit_logger_writes_verifiable_chain(tmp_path):
     _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {"file_path": "a.py"}}, cwd=tmp_path)
     _run(AUDIT_LOGGER, {"tool_name": "Bash", "tool_input": {"command": "ls"}}, cwd=tmp_path)

@@ -1,3 +1,4 @@
+from dataclasses import replace
 from pathlib import Path
 
 from sre_governance.catalog import load_catalog, load_profiles
@@ -45,12 +46,21 @@ def test_bad_repo_blocking_under_blocking_enforcement():
 
 
 def test_commercial_warning_enforcement_does_not_fail_pipeline_on_low_only():
-    # commercial has warning enforcement; a non-critical shortfall warns but
-    # should_fail_pipeline stays False because enforcement != blocking.
+    catalog, profiles = _ctx()
+    scan = scan_repo(GOOD)
+    scan.files.remove("LICENSE")
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    assert assessment.gate.enforcement == "warning"
+    assert assessment.gate.compliant
+    assert assessment.gate.should_fail_pipeline is False
+
+
+def test_commercial_critical_failures_block_in_warning_mode():
     catalog, profiles = _ctx()
     assessment = evaluate(scan_repo(BAD), catalog, profiles["commercial"])
     assert assessment.gate.enforcement == "warning"
-    assert assessment.gate.should_fail_pipeline is False
+    assert assessment.gate.critical_failure
+    assert assessment.gate.should_fail_pipeline is True
 
 
 def test_required_reviewers_threshold_from_profile():
@@ -66,7 +76,27 @@ def test_required_reviewers_threshold_from_profile():
 
 def test_na_controls_excluded_from_score():
     catalog, profiles = _ctx()
-    assessment = evaluate(scan_repo(GOOD), catalog, profiles["commercial"])
-    na = [r for r in assessment.results if r.status not in (PASS, FAIL)]
-    # commercial marks nothing not_applicable by default, so none expected here
-    assert all(r.applicability != "not_applicable" for r in assessment.results) or na
+    profile = profiles["commercial"]
+    baseline = evaluate(scan_repo(BAD), catalog, profile)
+    profile = replace(
+        profile,
+        control_overrides={**profile.control_overrides, "SRE-SLO-001": "not_applicable"},
+    )
+    assessment = evaluate(scan_repo(BAD), catalog, profile)
+    assert next(r for r in assessment.results if r.control_id == "SRE-SLO-001").status == "NOT_APPLICABLE"
+
+    weights = {"critical": 10, "high": 6, "medium": 3, "low": 1}
+    denominator = sum(weights[r.severity] for r in assessment.results if r.status != "NOT_APPLICABLE")
+    numerator = sum(
+        weights[r.severity] for r in assessment.results if r.status == PASS
+    )
+    assert assessment.score == round(numerator / denominator * 100, 1)
+    assert assessment.score > baseline.score
+
+
+def test_quoted_false_metadata_does_not_pass_boolean_check():
+    catalog, profiles = _ctx()
+    scan = merge_api_metadata(scan_repo(GOOD), {"governance": {"audit_logging": "false"}})
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    audit = next(r for r in assessment.results if r.control_id == "CMP-AUDIT-033")
+    assert audit.status == FAIL

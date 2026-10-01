@@ -10,7 +10,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from sre_governance.catalog import Catalog, Control, Profile
-from sre_governance.scanner import RepoScan, keyword_in_workflows
+from sre_governance.scanner import (
+    RepoScan,
+    has_sast_workflow,
+    has_slo_linked_observability,
+    keyword_in_workflows,
+)
 
 PASS = "PASS"
 FAIL = "FAIL"
@@ -45,10 +50,11 @@ class Gate:
     compliant: bool
     enforcement: str             # blocking | warning
     reasons: list[str]
+    critical_failure: bool = False
 
     @property
     def should_fail_pipeline(self) -> bool:
-        return self.enforcement == "blocking" and not self.compliant
+        return self.critical_failure or (self.enforcement == "blocking" and not self.compliant)
 
 
 @dataclass(frozen=True)
@@ -90,6 +96,18 @@ def _check_workflow_present(scan: RepoScan, params: dict[str, Any]) -> tuple[boo
     return False, f"no workflow references any of {keywords}"
 
 
+def _check_workflow_security_scan(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    if has_sast_workflow(scan):
+        return True, "workflow runs a SAST tool for pull requests and pushes"
+    return False, "no SAST analysis step runs for both pull requests and pushes"
+
+
+def _check_observability_configured(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    if has_slo_linked_observability(scan):
+        return True, "observability alert references a declared SLI"
+    return False, "no non-empty observability alert is linked to a declared SLI"
+
+
 def _check_content_match(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     path = params["path"]
     pattern = params["pattern"]
@@ -102,7 +120,7 @@ def _check_content_match(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, 
 def _check_metadata_true(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     key = params["key"]
     val = scan.metadata_value(key)
-    if bool(val) is True:
+    if val is True:
         return True, f"{key} is true"
     return False, f"{key} is not true (got {val!r})"
 
@@ -132,6 +150,8 @@ CHECKS: dict[str, CheckFn] = {
     "file_exists": _check_file_exists,
     "file_absent": _check_file_absent,
     "workflow_present": _check_workflow_present,
+    "workflow_security_scan": _check_workflow_security_scan,
+    "observability_configured": _check_observability_configured,
     "content_match": _check_content_match,
     "metadata_true": _check_metadata_true,
     "metadata_gte": _check_metadata_gte,
@@ -216,7 +236,10 @@ def _gate(results: list[Result], score: float, profile: Profile) -> Gate:
     if score < min_score:
         reasons.append(f"compliance score {score} below minimum {min_score}")
 
-    return Gate(compliant=not reasons, enforcement=profile.enforcement, reasons=reasons)
+    return Gate(
+        compliant=not reasons, enforcement=profile.enforcement, reasons=reasons,
+        critical_failure=crit_fail > max_crit,
+    )
 
 
 def _summarize(results: list[Result], score: float) -> dict[str, Any]:

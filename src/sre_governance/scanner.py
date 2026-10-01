@@ -2,7 +2,7 @@
 
 The scanner is read-only. It gathers:
   * the set of tracked file and directory paths (repo-relative, POSIX style),
-  * the concatenated text of CI workflow files, and
+  * parsed CI workflow definitions, and
   * declared governance metadata from `.sre/governance.yaml`.
 
 Declared metadata lets teams attest to settings the agent cannot read offline
@@ -12,6 +12,7 @@ from the GitHub API by the pipeline before invoking the engine.
 from __future__ import annotations
 
 import re
+import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,7 @@ class RepoScan:
     root: Path
     files: set[str] = field(default_factory=set)
     dirs: set[str] = field(default_factory=set)
-    workflow_text: str = ""
+    workflows: list[dict[str, Any]] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def has_path(self, candidate: str) -> bool:
@@ -42,6 +43,8 @@ class RepoScan:
         return candidate in self.files or candidate in self.dirs
 
     def read_text(self, relpath: str) -> str:
+        if relpath not in self.files:
+            return ""
         p = self.root / relpath
         if p.is_file():
             return p.read_text(encoding="utf-8", errors="replace")
@@ -63,25 +66,42 @@ def scan_repo(root: str | Path) -> RepoScan:
         raise NotADirectoryError(f"Repo path is not a directory: {root}")
 
     scan = RepoScan(root=root)
-    for path in _walk(root):
-        rel = path.relative_to(root).as_posix()
-        if path.is_dir():
-            scan.dirs.add(rel)
-        else:
-            scan.files.add(rel)
+    tracked_paths = _tracked_paths(root)
+    if tracked_paths is None:
+        paths = _walk(root)
+        for path in paths:
+            rel = path.relative_to(root).as_posix()
+            if path.is_dir():
+                scan.dirs.add(rel)
+            else:
+                scan.files.add(rel)
+    else:
+        for rel in tracked_paths:
+            path = root / rel
+            if not path.exists() or any(part in _IGNORE_DIRS for part in Path(rel).parts):
+                continue
+            if path.is_file():
+                scan.files.add(rel)
+            parent = path.parent
+            while parent != root:
+                if parent.is_dir():
+                    scan.dirs.add(parent.relative_to(root).as_posix())
+                parent = parent.parent
 
-    # Workflow text (lowercased for case-insensitive keyword checks).
-    parts: list[str] = []
-    for pattern in _WORKFLOW_GLOBS:
-        for wf in sorted(root.glob(pattern)):
-            parts.append(wf.read_text(encoding="utf-8", errors="replace"))
-    scan.workflow_text = "\n".join(parts).lower()
+    for rel in sorted(scan.files):
+        if Path(rel).parent.as_posix() != ".github/workflows" or not rel.endswith((".yml", ".yaml")):
+            continue
+        try:
+            workflow = yaml.load(scan.read_text(rel), Loader=yaml.BaseLoader)
+        except yaml.YAMLError:
+            continue
+        if isinstance(workflow, dict):
+            scan.workflows.append(workflow)
 
     # Declared governance metadata.
     for mp in _METADATA_PATHS:
-        meta_path = root / mp
-        if meta_path.is_file():
-            scan.metadata = yaml.safe_load(meta_path.read_text(encoding="utf-8")) or {}
+        if mp in scan.files:
+            scan.metadata = yaml.safe_load(scan.read_text(mp)) or {}
             break
 
     return scan
@@ -103,6 +123,17 @@ def _walk(root: Path):
         yield path
 
 
+def _tracked_paths(root: Path) -> list[str] | None:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z"],
+            check=True, capture_output=True, text=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [path for path in result.stdout.split("\0") if path]
+
+
 def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
     out = dict(base)
     for k, v in overlay.items():
@@ -114,4 +145,130 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
 
 
 def keyword_in_workflows(scan: RepoScan, keywords: list[str]) -> bool:
-    return any(re.search(re.escape(k.lower()), scan.workflow_text) for k in keywords)
+    terms = [re.compile(re.escape(keyword), re.IGNORECASE) for keyword in keywords]
+    for workflow in scan.workflows:
+        values: list[str] = []
+        triggers = workflow.get("on", {})
+        if isinstance(triggers, dict):
+            values.extend(str(value) for value in triggers)
+        elif isinstance(triggers, list):
+            values.extend(str(value) for value in triggers)
+        elif triggers:
+            values.append(str(triggers))
+
+        jobs = workflow.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        for job_id, job in jobs.items():
+            values.append(str(job_id))
+            if not isinstance(job, dict):
+                continue
+            values.append(str(job.get("name", "")))
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                values.extend(str(step.get(key, "")) for key in ("name", "run"))
+                uses = str(step.get("uses", ""))
+                if not uses.lower().endswith("/upload-sarif@v3") and "upload-sarif" not in uses.lower():
+                    values.append(uses)
+        if any(term.search(value) for term in terms for value in values):
+            return True
+    return False
+
+
+def has_sast_workflow(scan: RepoScan) -> bool:
+    for workflow in scan.workflows:
+        triggers = workflow.get("on", {})
+        if isinstance(triggers, dict):
+            trigger_names = set(triggers)
+        elif isinstance(triggers, list):
+            trigger_names = set(triggers)
+        else:
+            trigger_names = {triggers} if triggers else set()
+        if not {"pull_request", "push"}.issubset(trigger_names):
+            continue
+
+        jobs = workflow.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        for job in jobs.values():
+            if not isinstance(job, dict):
+                continue
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                uses = str(step.get("uses", "")).lower()
+                if re.search(r"github/codeql-action/analyze@", uses):
+                    return True
+                if re.search(r"(?:semgrep/semgrep|returntocorp/semgrep-action)@", uses):
+                    return True
+                run = str(step.get("run", "")).lower()
+                command = (
+                    r"(?m)^\s*(?:(?:[a-z_][a-z0-9_]*=\S+)\s+)*"
+                    r"(?:python(?:\d+(?:\.\d+)?)?\s+-m\s+)?"
+                    r"(?:bandit|semgrep|snyk\s+code\s+test|codeql\s+database\s+analyze)(?:\s|$)"
+                )
+                if re.search(command, run):
+                    return True
+    return False
+
+
+def has_slo_linked_observability(scan: RepoScan) -> bool:
+    slo_data = None
+    for path in (".sre/slo.yaml", ".sre/slo.yml"):
+        text = scan.read_text(path)
+        if text:
+            try:
+                slo_data = yaml.safe_load(text)
+            except yaml.YAMLError:
+                return False
+            break
+    if not isinstance(slo_data, dict):
+        return False
+
+    sli_names: set[str] = set()
+    for slo in slo_data.get("slos", []) or []:
+        if isinstance(slo, dict):
+            sli_names.update(
+                str(slo[key]).strip().lower()
+                for key in ("name", "sli")
+                if slo.get(key)
+            )
+    if not sli_names:
+        return False
+
+    def valid_alerts(value: Any) -> bool:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(key, str) and key.lower() in {"alerts", "rules"} and isinstance(child, list):
+                    for alert in child:
+                        if not isinstance(alert, dict):
+                            continue
+                        sli = str(alert.get("sli", "")).strip().lower()
+                        has_query = any(alert.get(key) for key in ("query", "expr", "expression", "condition"))
+                        if alert.get("name") and sli in sli_names and has_query:
+                            return True
+                if valid_alerts(child):
+                    return True
+        elif isinstance(value, list):
+            return any(valid_alerts(child) for child in value)
+        return False
+
+    for rel in scan.files:
+        if not rel.endswith((".yaml", ".yml")):
+            continue
+        if not (rel.startswith(("observability/", "monitoring/")) or rel in {".sre/alerts.yaml", ".sre/alerts.yml"}):
+            continue
+        try:
+            data = yaml.safe_load(scan.read_text(rel))
+        except yaml.YAMLError:
+            continue
+        if valid_alerts(data):
+            return True
+    return False

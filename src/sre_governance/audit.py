@@ -69,12 +69,12 @@ class AuditLogger:
     def verify(self) -> tuple[bool, str]:
         """Verify the hash chain. Returns (ok, message)."""
         if not self.path.exists():
-            return True, "no audit log yet"
+            return False, "audit log is missing"
+        lines = [line.strip() for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        if not lines:
+            return False, "audit log is empty"
         prev = GENESIS_HASH
-        for i, line in enumerate(self.path.read_text(encoding="utf-8").splitlines(), 1):
-            line = line.strip()
-            if not line:
-                continue
+        for i, line in enumerate(lines, 1):
             rec = json.loads(line)
             stored = rec.get("hash", "")
             event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})

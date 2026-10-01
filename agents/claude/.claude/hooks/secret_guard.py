@@ -31,6 +31,15 @@ FORBIDDEN_CMD = [
     r"rm\s+-rf\s+/(?!\w)",
 ]
 
+SENSITIVE_PATH_PATTERNS = [
+    r"(?i)(?<![\w])\.env(?:\.[\w.-]+)?(?![\w])",
+    r"(?i)(?<![\w])(?:\.ssh|\.aws)(?:[/\\][\w./\\-]+)?",
+    r"(?i)(?<![\w])id_(?:rsa|ed25519)[\w.-]*",
+    r"(?i)(?<![\w])\.git-credentials(?![\w])",
+    r"(?i)(?<![\w])[\w.-]+\.(?:pem|key|p12|pfx)(?![\w])",
+    r"(?i)(?<![\w])(?:secrets?|credentials?)(?:[/\\][\w./\\-]+|[._-](?:ya?ml|json|toml|txt))",
+]
+
 PROTECTED_WRITE = (".sre/audit.jsonl",)
 
 
@@ -64,6 +73,13 @@ def main() -> int:
                   "via reviewed pull request; never force-push or self-merge.",
                   file=sys.stderr)
             return 2
+
+    if payload.get("tool_name") == "Bash" and any(
+        re.search(pat, blob) for pat in SENSITIVE_PATH_PATTERNS
+    ):
+        print("BLOCKED: Bash commands may not access sensitive credential paths. "
+              "Use the approved secret manager instead.", file=sys.stderr)
+        return 2
 
     for pat in SECRET_PATTERNS:
         if re.search(pat, blob):

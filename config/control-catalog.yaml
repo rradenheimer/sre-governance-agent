@@ -10,7 +10,8 @@
 #
 # `check.type` must be one of the evaluators registered in engine.CHECKS:
 #   file_exists | file_absent | workflow_present | content_match |
-#   metadata_true | metadata_gte | metadata_in
+#   metadata_true | metadata_gte | metadata_in | workflow_security_scan |
+#   observability_configured
 # ---------------------------------------------------------------------------
 version: "1.0.0"
 schema_version: 1
@@ -74,8 +75,7 @@ controls:
     description: Dashboards and alerts declared as code and linked to SLOs.
     rationale: You cannot operate what you cannot observe; config-as-code enables review.
     check:
-      type: file_exists
-      any_of: ["observability/", "monitoring/", ".sre/alerts.yaml", "dashboards/"]
+      type: observability_configured
     remediation: Add observability-as-code (alerts/dashboards) tied to your SLIs.
     mappings:
       NIST-800-53: ["AU-6", "SI-4"]
@@ -234,8 +234,7 @@ controls:
     description: SAST/code scanning runs on PRs and the default branch.
     rationale: Early defect detection lowers cost and risk.
     check:
-      type: workflow_present
-      keywords: ["codeql", "sast", "semgrep", "code-scanning", "snyk", "bandit"]
+      type: workflow_security_scan
     remediation: Add a SAST/code-scanning workflow (e.g., CodeQL) gating merges.
     mappings:
       NIST-800-53: ["RA-5", "SA-11"]
