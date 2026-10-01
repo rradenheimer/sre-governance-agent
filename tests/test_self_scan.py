@@ -49,6 +49,16 @@ def test_release_and_iac_workflows_have_real_gates():
     assert any("git merge-base --is-ancestor" in step.get("run", "")
                and "gh release edit" in step["run"] for step in promote)
 
+    validation = yaml.load(
+        (workflows / "policy-validation.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    validation_steps = validation["jobs"]["validate"]["steps"]
+    assert any(step.get("uses", "").startswith("anchore/sbom-action@")
+               for step in validation_steps)
+    assert any("spdxVersion" in step.get("run", "")
+               for step in validation_steps)
+
     iac = yaml.load(
         (workflows / "iac-scan.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,

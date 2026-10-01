@@ -32,6 +32,21 @@ jobs:
         run: PYTHONPATH=src python -m sre_governance.cli validate-config
       - name: Run engine tests
         run: python -m pytest -q
+      - name: Build release source archive
+        run: |
+          mkdir dist
+          git archive --format=tar.gz --output=dist/sre-governance-agent.tar.gz \
+            HEAD src config agents docs policies requirements.txt README.md LICENSE VERSION
+      - name: Generate candidate SPDX SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          file: dist/sre-governance-agent.tar.gz
+          format: spdx-json
+          output-file: dist/sre-governance-agent.spdx.json
+      - name: Validate release SBOM
+        run: |
+          jq -e '.spdxVersion == "SPDX-2.3" and (.packages | length > 0)' \
+            dist/sre-governance-agent.spdx.json
       - name: Lint OPA policies (if conftest present)
         continue-on-error: true
         run: |
