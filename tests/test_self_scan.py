@@ -59,6 +59,10 @@ def test_release_and_iac_workflows_have_real_gates():
                for step in candidate)
     assert any("gh release create" in step.get("run", "")
                and "--prerelease" in step["run"] for step in candidate)
+    assert any(".immutable" in step.get("run", "")
+               and "grep -qx true" in step["run"] for step in candidate)
+    assert ".immutable" in promote_run
+    assert ".digest" in promote_run and "sha256sum --check" in promote_run
     assert any("git merge-base --is-ancestor" in step.get("run", "")
                and "gh release edit" in step["run"] for step in promote)
 
@@ -94,6 +98,34 @@ def test_release_and_iac_workflows_have_real_gates():
             if step.get("name") == "Comment report on PR"
         )
         assert comment.get("continue-on-error") == "true"
+        assert any(step.get("name") == "Restore prior audit chain"
+                   for step in governance["jobs"]["governance-scan"]["steps"])
+        restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]
+                       if step.get("name") == "Restore prior audit chain")
+        assert "sre-governance-reports" in restore["run"]
+        assert any(step.get("name") == "Persist audit chain for the next run"
+                   for step in governance["jobs"]["governance-scan"]["steps"])
+
+    dependency_review = yaml.load(
+        (ROOT / ".github" / "workflows" / "dependency-review.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    review_step = dependency_review["jobs"]["dependency-review"]["steps"][0]
+    assert review_step["uses"] == "actions/dependency-review-action@v5"
+    assert review_step["with"]["fail-on-severity"] == "critical"
+
+    template_workflow = yaml.load(
+        (ROOT / "agents" / "copilot" / ".github" / "workflows" / "sre-governance.yml")
+        .read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    template_steps = template_workflow["jobs"]["governance-scan"]["steps"]
+    engine_checkout = next(step for step in template_steps
+                           if step.get("with", {}).get("repository") == "rradenheimer/sre-governance-agent")
+    assert engine_checkout["with"]["ref"] == "v1.0.0"
+    template_scan = next(step for step in template_steps if step.get("name") == "Run governance scan")
+    assert "sre-governance-engine/src" in template_scan["run"]
+    assert "sre-governance-engine/config/control-catalog.yaml" in template_scan["run"]
 
     iac = yaml.load(
         (workflows / "iac-scan.yml").read_text(encoding="utf-8"),

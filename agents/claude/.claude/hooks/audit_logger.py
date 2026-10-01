@@ -25,16 +25,29 @@ def _now() -> str:
 
 def _last_hash() -> str:
     if not AUDIT_PATH.exists():
+        if AUDIT_HEAD_PATH.exists():
+            raise ValueError("audit head anchor exists without an audit log")
         return GENESIS_HASH
-    last = GENESIS_HASH
-    for line in AUDIT_PATH.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if line:
-            try:
-                last = json.loads(line).get("hash", GENESIS_HASH)
-            except Exception:
-                pass
-    return last
+    lines = [line.strip() for line in AUDIT_PATH.read_text(encoding="utf-8").splitlines() if line.strip()]
+    if not lines:
+        raise ValueError("audit log is empty")
+    previous = GENESIS_HASH
+    record = None
+    required = {"ts", "actor", "action", "target", "outcome", "details", "prev_hash", "hash"}
+    for index, line in enumerate(lines, 1):
+        record = json.loads(line)
+        if not isinstance(record, dict) or set(record) != required:
+            raise ValueError(f"malformed audit record {index}")
+        if record["prev_hash"] != previous or record["hash"] != _compute_hash(record):
+            raise ValueError(f"broken audit chain at record {index}")
+        previous = record["hash"]
+    if not AUDIT_HEAD_PATH.exists():
+        raise ValueError("audit head anchor is missing")
+    anchor = json.loads(AUDIT_HEAD_PATH.read_text(encoding="utf-8"))
+    if not isinstance(anchor, dict) or anchor.get("record_count") != len(lines) \
+            or anchor.get("head_hash") != previous:
+        raise ValueError("audit head anchor does not match the log")
+    return previous
 
 
 def _compute_hash(record: dict) -> str:

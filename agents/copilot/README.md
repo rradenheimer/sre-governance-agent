@@ -12,14 +12,16 @@ Drop-in agent configuration for GitHub Copilot (VS Code + Copilot coding agent).
 | `.github/prompts/sre-remediate.prompt.md` | `/sre-remediate` — minimal fix via PR |
 | `.github/prompts/sre-onboard.prompt.md` | `/sre-onboard` — baseline a new repo |
 | `.github/workflows/sre-governance.yml` | CI gate: scan → SARIF → PR comment → enforce |
+| `.github/workflows/dependency-review.yml` | Fail PRs with critical dependency vulnerabilities |
 | `.github/workflows/policy-validation.yml` | Validate catalog/profiles + run engine tests |
 | `AGENTS.md` | Rules for the Copilot coding agent |
 
 ## Install
 
 Copy the `.github/` contents into the target repository (or into your org's
-`.github` template repo to apply fleet-wide). Ensure the engine is available —
-either vendor `src/sre_governance/` or `pip install` the internal package.
+`.github` template repo to apply fleet-wide). The governance workflow checks out
+the engine and its catalog/profile configuration from the pinned `v1.0.0` release;
+update that checkout ref when adopting a newer release.
 
 ## Use
 

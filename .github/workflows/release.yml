@@ -56,3 +56,5 @@ jobs:
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" --title "SRE Governance Agent v$VERSION" \
             --generate-notes --prerelease
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/v$VERSION" --jq '.immutable' |
+            grep -qx true

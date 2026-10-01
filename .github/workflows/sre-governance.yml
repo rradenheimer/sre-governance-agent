@@ -14,8 +14,13 @@ on:
 
 permissions:
   contents: read
+  actions: read
   pull-requests: write
   security-events: write    # required to upload SARIF
+
+concurrency:
+  group: sre-governance-${{ github.event.pull_request.head.ref || github.ref }}
+  cancel-in-progress: false
 
 jobs:
   governance-scan:
@@ -29,6 +34,27 @@ jobs:
 
       - name: Install engine
         run: pip install pyyaml
+
+      - name: Restore prior audit chain
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
+          PRIOR_RUN="$(gh run list --workflow sre-governance.yml --branch "$BRANCH" \
+            --status completed --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -n "$PRIOR_RUN" ]; then
+            mkdir -p "$RUNNER_TEMP/sre-governance-audit"
+            if gh run download "$PRIOR_RUN" --name sre-governance-audit \
+              --dir "$RUNNER_TEMP/sre-governance-audit"; then
+              tar -xzf "$RUNNER_TEMP/sre-governance-audit/audit-chain.tar.gz" -C .
+            else
+              mkdir -p "$RUNNER_TEMP/sre-governance-reports"
+              gh run download "$PRIOR_RUN" --name sre-governance-reports \
+                --dir "$RUNNER_TEMP/sre-governance-reports"
+              cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl" .sre/audit.jsonl
+              cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl.head" .sre/audit.jsonl.head
+            fi
+          fi
 
       - name: Resolve profile
         id: profile
@@ -72,6 +98,18 @@ jobs:
             sre-reports/
             .sre/audit.jsonl
             .sre/audit.jsonl.head
+
+      - name: Prepare durable audit artifact
+        if: always()
+        run: tar -czf "$RUNNER_TEMP/audit-chain.tar.gz" .sre/audit.jsonl .sre/audit.jsonl.head
+
+      - name: Persist audit chain for the next run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sre-governance-audit
+          path: ${{ runner.temp }}/audit-chain.tar.gz
+          if-no-files-found: error
 
       - name: Comment report on PR
         if: github.event_name == 'pull_request'

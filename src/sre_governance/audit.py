@@ -49,13 +49,16 @@ class AuditLogger:
 
     def _last_hash(self) -> str:
         if not self.path.exists():
+            if self.anchor_path.exists():
+                raise RuntimeError("audit head anchor exists without an audit log")
             return GENESIS_HASH
-        last = GENESIS_HASH
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line:
-                last = json.loads(line).get("hash", GENESIS_HASH)
-        return last
+        log_text = self.path.read_text(encoding="utf-8")
+        anchor_text = self.anchor_path.read_text(encoding="utf-8") if self.anchor_path.exists() else None
+        valid, message = verify_audit_contents(log_text, anchor_text)
+        if not valid:
+            raise RuntimeError(f"refusing to append to invalid audit chain: {message}")
+        last_line = next(line for line in reversed(log_text.splitlines()) if line.strip())
+        return json.loads(last_line)["hash"]
 
     def record(self, action: str, target: str, outcome: str = "success", **details: Any) -> AuditEvent:
         event = AuditEvent(

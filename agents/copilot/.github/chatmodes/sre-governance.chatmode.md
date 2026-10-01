@@ -1,6 +1,6 @@
 ---
 description: Governance-audit chat mode — scans a repo and reports compliance against the active industry profile. Read-only.
-tools: ['codebase', 'search', 'terminalLastCommand', 'runCommands', 'editFiles']
+tools: ['codebase', 'search', 'terminalLastCommand', 'runCommands']
 model: Claude Sonnet 4.5
 ---
 

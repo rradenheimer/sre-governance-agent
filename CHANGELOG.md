@@ -6,7 +6,7 @@ The catalog version is stamped into every report's provenance block.
 ## [1.0.0] - 2026-10-01
 
 ### Added
-- Deterministic policy engine (`src/sre_governance/`) with 7 check types,
+- Deterministic policy engine (`src/sre_governance/`) with 11 check types,
   severity-weighted scoring, and a profile-driven policy gate.
 - Master control catalog of **21 controls** across reliability/SRE, observability,
   governance, security/supply-chain, and compliance — each mapped to NIST 800-53,

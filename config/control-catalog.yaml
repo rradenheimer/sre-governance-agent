@@ -11,7 +11,8 @@
 # `check.type` must be one of the evaluators registered in engine.CHECKS:
 #   file_exists | file_absent | workflow_present | content_match |
 #   metadata_true | metadata_gte | metadata_in | workflow_security_scan |
-#   observability_configured | slo_configured | audit_log_verified
+#   observability_configured | slo_configured | audit_log_verified |
+#   sca_configured
 # ---------------------------------------------------------------------------
 version: "1.0.0"
 schema_version: 1
@@ -90,7 +91,7 @@ controls:
     rationale: Most incidents are change-induced; safe rollout limits blast radius.
     check:
       type: workflow_present
-      keywords: ["deploy", "release", "rollout", "canary"]
+      requirement: safe_change_workflow
     remediation: Add a deployment workflow with staged rollout and automated rollback.
     mappings:
       NIST-800-53: ["CM-3", "CM-4"]
@@ -249,8 +250,8 @@ controls:
     description: Software composition analysis flags vulnerable dependencies.
     rationale: Most code is dependencies; vulnerable transitives are common.
     check:
-      type: file_exists
-      any_of: [".github/dependabot.yml", ".github/dependabot.yaml", "renovate.json", ".renovaterc"]
+      type: workflow_present
+      requirement: sca_configured
     remediation: Enable Dependabot/Renovate and fail CI on critical advisories.
     mappings:
       NIST-800-53: ["RA-5", "SA-12"]
@@ -266,7 +267,7 @@ controls:
     rationale: SBOMs enable rapid impact analysis (e.g., Log4Shell).
     check:
       type: workflow_present
-      keywords: ["sbom", "syft", "cyclonedx", "spdx"]
+      requirement: sbom_workflow
     remediation: Add an SBOM generation step (Syft/CycloneDX) to the release workflow.
     mappings:
       NIST-800-53: ["SA-8"]
@@ -283,7 +284,7 @@ controls:
     rationale: Cloud misconfiguration is a leading breach vector.
     check:
       type: workflow_present
-      keywords: ["tfsec", "checkov", "terrascan", "kics", "iac-scan"]
+      requirement: iac_workflow
     remediation: Add an IaC scanner (Checkov/tfsec) to CI for Terraform/K8s/CFN.
     mappings:
       NIST-800-53: ["CM-6", "CM-7"]

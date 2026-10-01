@@ -50,6 +50,12 @@ Each repo emits `sre-governance-report.json`. Aggregate them:
 - Track: mean compliance score by business unit, # repos below profile minimum,
   top failing controls, time-to-remediate.
 
+The governance workflow restores the latest completed audit-chain artifact for
+the same branch before scanning, serializes runs for that branch, and uploads the
+updated chain for the next run. Configure Actions artifact retention to match the
+audit policy; export artifacts to an approved durable archive when platform
+retention limits do not cover the required period.
+
 ## Verify remote settings separately
 
 The scanner reads declared `.sre/governance.yaml` values; the bundled CI workflow
@@ -93,7 +99,9 @@ Inspect and test the candidate assets before manually dispatching **Promote
 GitHub Release** from `main`. Promotion requires the
 candidate to be a prerelease, requires both archive and SBOM assets, and
 checks that the tag is an ancestor of the current `main` before publishing
-the already-built artifacts. Promotion does not rebuild. If a release must be
+the already-built artifacts. The repository must have immutable releases enabled;
+promotion also checks each downloaded asset against its GitHub SHA-256 digest.
+Promotion does not rebuild. If a release must be
 withdrawn, mark it as a prerelease in GitHub, stop distributing the affected
 version, and ship a reviewed fix under a new version; do not rewrite release
 tags.

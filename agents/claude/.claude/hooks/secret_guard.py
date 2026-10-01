@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import re
 import sys
+from pathlib import Path
 
 # High-signal secret patterns. Deliberately conservative to avoid false blocks.
 SECRET_PATTERNS = [
@@ -26,8 +27,9 @@ SECRET_PATTERNS = [
 
 # Commands that are never allowed from the agent.
 FORBIDDEN_CMD = [
-    r"git\s+push\s+(--force|-f)\b",
-    r"\bgh\s+pr\s+(merge|review\s+--approve)\b",
+    r"\bgit\s+push\b[^;&|\n]*(?:--force(?:-with-lease)?|-f)(?:\s|$)",
+    r"\bgh\s+pr\s+merge\b",
+    r"\bgh\s+pr\s+review\b[^;&|\n]*--approve\b",
     r"rm\s+-rf\s+/(?!\w)",
 ]
 
@@ -41,6 +43,29 @@ SENSITIVE_PATH_PATTERNS = [
 ]
 
 PROTECTED_WRITE = (".sre/audit.jsonl", ".sre/audit.jsonl.head")
+
+
+def _suggest_only_profile() -> bool:
+    profile_path = Path(".sre/profile")
+    try:
+        profile = profile_path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return False
+    if profile == "federal-defense":
+        return True
+    candidates = [
+        Path(".sre/governance.yaml"),
+        Path("config/industry-profiles") / f"{profile}.yaml",
+        Path("config/industry-profiles") / f"{profile}.yml",
+    ]
+    return any(
+        candidate.is_file()
+        and re.search(
+            r"(?m)^\s*ai_autonomy\s*:\s*[\"']?suggest_only(?:[\"']|\s|$)",
+            candidate.read_text(encoding="utf-8"),
+        )
+        for candidate in candidates
+    )
 
 
 def _blob(tool_input: dict) -> str:
@@ -71,6 +96,11 @@ def main() -> int:
     tool_input = payload.get("tool_input", {}) or {}
     target = tool_input.get("file_path", "") or ""
     blob = _blob(tool_input)
+
+    if _suggest_only_profile() and payload.get("tool_name") in {"Edit", "Write", "MultiEdit"}:
+        print("BLOCKED: the active profile is suggest_only; file edits are not permitted.",
+              file=sys.stderr)
+        return 2
 
     if any(target.replace("\\", "/").endswith(p) for p in PROTECTED_WRITE):
         print("BLOCKED: the audit log (.sre/audit.jsonl) is append-only and may "

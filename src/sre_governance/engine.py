@@ -15,9 +15,12 @@ from sre_governance.audit import verify_audit_contents
 from sre_governance.catalog import Catalog, Control, Profile
 from sre_governance.scanner import (
     RepoScan,
+    has_iac_workflow,
+    has_safe_change_workflow,
+    has_sca_configuration,
+    has_sbom_workflow,
     has_sast_workflow,
     has_slo_linked_observability,
-    keyword_in_workflows,
 )
 
 PASS = "PASS"
@@ -93,10 +96,17 @@ def _check_file_absent(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, st
 
 
 def _check_workflow_present(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
-    keywords = params.get("keywords", [])
-    if keyword_in_workflows(scan, keywords):
-        return True, f"workflow references one of {keywords}"
-    return False, f"no workflow references any of {keywords}"
+    checkers = {
+        "safe_change_workflow": has_safe_change_workflow,
+        "sbom_workflow": has_sbom_workflow,
+        "iac_workflow": has_iac_workflow,
+        "sca_configured": has_sca_configuration,
+    }
+    requirement = params["requirement"]
+    checker = checkers[requirement]
+    if checker(scan):
+        return True, f"workflow satisfies {requirement} evidence requirements"
+    return False, f"no workflow satisfies {requirement} evidence requirements"
 
 
 def _check_workflow_security_scan(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:

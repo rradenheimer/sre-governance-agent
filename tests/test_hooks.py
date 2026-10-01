@@ -23,6 +23,33 @@ def test_secret_guard_allows_benign():
     assert r.returncode == 0
 
 
+def test_secret_guard_blocks_edits_in_suggest_only_profile(tmp_path):
+    profile = tmp_path / ".sre" / "profile"
+    profile.parent.mkdir()
+    profile.write_text("federal-defense\n", encoding="utf-8")
+
+    result = _run(
+        SECRET_GUARD,
+        {"tool_name": "Write", "tool_input": {"file_path": "report.md", "content": "proposal"}},
+        cwd=tmp_path,
+    )
+
+    assert result.returncode == 2
+    assert "suggest_only" in result.stderr
+
+
+def test_read_only_mode_does_not_grant_editing():
+    settings = json.loads(
+        (ROOT / "agents" / "claude" / ".claude" / "settings.json").read_text(encoding="utf-8")
+    )
+    chatmode = (
+        ROOT / "agents" / "copilot" / ".github" / "chatmodes" / "sre-governance.chatmode.md"
+    ).read_text(encoding="utf-8")
+
+    assert settings["permissions"]["defaultMode"] != "acceptEdits"
+    assert "editFiles" not in chatmode.split("---", 2)[1]
+
+
 def test_secret_guard_blocks_aws_key():
     r = _run(SECRET_GUARD, {"tool_name": "Write",
                             "tool_input": {"file_path": "a.txt", "content": "AKIAIOSFODNN7EXAMPLE"}})
@@ -59,8 +86,21 @@ def test_secret_guard_blocks_audit_anchor_edit():
 
 
 def test_secret_guard_blocks_force_push():
-    r = _run(SECRET_GUARD, {"tool_name": "Bash",
-                            "tool_input": {"command": "git push --force origin main"}})
+    for command in (
+        "git push --force origin main",
+        "git push origin main --force",
+        "git push origin main --force-with-lease",
+        "git push origin main -f",
+    ):
+        r = _run(SECRET_GUARD, {"tool_name": "Bash", "tool_input": {"command": command}})
+        assert r.returncode == 2, command
+
+
+def test_secret_guard_blocks_self_approval_with_flags_after_arguments():
+    r = _run(SECRET_GUARD, {
+        "tool_name": "Bash",
+        "tool_input": {"command": "gh pr review 123 --approve"},
+    })
     assert r.returncode == 2
 
 
@@ -95,3 +135,21 @@ def test_audit_logger_reports_persistence_failure(tmp_path):
     result = _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {}}, cwd=tmp_path)
     assert result.returncode == 2
     assert "failed to write audit record" in result.stderr
+
+
+def test_audit_logger_rejects_truncated_history(tmp_path):
+    first = _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {}}, cwd=tmp_path)
+    assert first.returncode == 0
+    second = _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {}}, cwd=tmp_path)
+    assert second.returncode == 0
+
+    audit = tmp_path / ".sre" / "audit.jsonl"
+    anchor = tmp_path / ".sre" / "audit.jsonl.head"
+    retained_record = audit.read_text(encoding="utf-8").splitlines()[0]
+    original_anchor = anchor.read_text(encoding="utf-8")
+    audit.write_text(retained_record + "\n", encoding="utf-8")
+
+    result = _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {}}, cwd=tmp_path)
+    assert result.returncode == 2
+    assert "failed to write audit record" in result.stderr
+    assert anchor.read_text(encoding="utf-8") == original_anchor

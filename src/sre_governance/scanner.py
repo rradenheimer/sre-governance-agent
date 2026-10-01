@@ -50,6 +50,9 @@ class RepoScan:
             p.relative_to(self.root)
         except (OSError, RuntimeError, ValueError):
             return ""
+        resolved_relpath = p.relative_to(self.root).as_posix()
+        if resolved_relpath != relpath and resolved_relpath not in self.files:
+            return ""
         if p.is_file():
             return p.read_text(encoding="utf-8", errors="replace")
         return ""
@@ -180,6 +183,186 @@ def keyword_in_workflows(scan: RepoScan, keywords: list[str]) -> bool:
                     values.append(uses)
         if any(term.search(value) for term in terms for value in values):
             return True
+    return False
+
+
+def _workflow_triggers(workflow: dict[str, Any]) -> set[str]:
+    triggers = workflow.get("on", {})
+    if isinstance(triggers, dict):
+        return set(triggers)
+    if isinstance(triggers, list):
+        return set(triggers)
+    return {triggers} if triggers else set()
+
+
+def _workflow_steps(workflow: dict[str, Any]):
+    jobs = workflow.get("jobs", {})
+    if not isinstance(jobs, dict):
+        return
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if isinstance(step, dict):
+                yield step
+
+
+def _commands(run: str, pattern: str, required: str | None = None) -> bool:
+    lines = run.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        command = line
+        while command.rstrip().endswith("\\") and index < len(lines):
+            command = command.rstrip()[:-1] + " " + lines[index].strip()
+            index += 1
+        if re.search(pattern, line, re.IGNORECASE) and (
+            required is None or re.search(required, command, re.IGNORECASE)
+        ):
+            return True
+    return False
+
+
+def has_safe_change_workflow(scan: RepoScan) -> bool:
+    deploy_actions = (
+        "azure/webapps-deploy@",
+        "aws-actions/amazon-ecs-deploy-task-definition@",
+        "google-github-actions/deploy-cloudrun@",
+        "deliverybot/helm@",
+    )
+    deploy_command = r"^\s*(?:sudo\s+)?(?:kubectl\s+apply|helm\s+upgrade|terraform\s+apply|ansible-playbook|\.?/[\w./-]*deploy[\w./-]*)(?:\s|$)"
+    rollout = re.compile(r"(?:--canary\b|--blue-green\b|--strategy(?:=|\s+)(?:rolling|canary|blue-green)|kubectl\s+rollout\b)", re.I)
+    for workflow in scan.workflows:
+        if not _workflow_triggers(workflow).intersection({"push", "workflow_dispatch", "release"}):
+            continue
+        for step in _workflow_steps(workflow):
+            uses = str(step.get("uses", "")).lower()
+            run = str(step.get("run", ""))
+            if any(uses.startswith(action) for action in deploy_actions):
+                config = step.get("with", {})
+                if isinstance(config, dict) and any(
+                    rollout.search(f"{key} {value}") for key, value in config.items()
+                ):
+                    return True
+            if _commands(run, deploy_command, rollout.pattern):
+                return True
+            if _commands(
+                run,
+                r"^\s*gh\s+release\s+create\b",
+                r"(?:--prerelease|--draft)\b",
+            ):
+                return True
+    return False
+
+
+def has_sbom_workflow(scan: RepoScan) -> bool:
+    for workflow in scan.workflows:
+        triggers = _workflow_triggers(workflow)
+        push = workflow.get("on", {}).get("push", {}) if isinstance(workflow.get("on"), dict) else {}
+        tagged_release = isinstance(push, dict) and bool(push.get("tags"))
+        if not triggers.intersection({"release", "workflow_dispatch"}) and not tagged_release:
+            continue
+        steps = list(_workflow_steps(workflow))
+        generated = False
+        published = False
+        for step in steps:
+            uses = str(step.get("uses", "")).lower()
+            run = str(step.get("run", ""))
+            config = step.get("with", {})
+            if uses.startswith("anchore/sbom-action@") and isinstance(config, dict) \
+                    and config.get("output-file"):
+                generated = True
+            if _commands(
+                run,
+                r"^\s*(?:syft|cyclonedx|trivy\s+fs)\b",
+                r"(?:>|--output|--format)",
+            ):
+                generated = True
+            if _commands(run, r"^\s*gh\s+release\s+(?:create|upload)\b") or (
+                uses.startswith(("softprops/action-gh-release@", "ncipollo/release-action@"))
+                and isinstance(config, dict) and config.get("files")
+            ):
+                published = True
+        if generated and published:
+            return True
+    return False
+
+
+def has_iac_workflow(scan: RepoScan) -> bool:
+    scanner_actions = (
+        "bridgecrewio/checkov-action@",
+        "aquasecurity/tfsec-action@",
+        "tenable/terrascan-action@",
+    )
+    scanner_command = r"^\s*(?:python(?:\d+(?:\.\d+)?)?\s+-m\s+)?(?:checkov|tfsec|terrascan|kics)(?:\s|$)"
+    for workflow in scan.workflows:
+        if not {"push", "pull_request"}.issubset(_workflow_triggers(workflow)):
+            continue
+        for step in _workflow_steps(workflow):
+            uses = str(step.get("uses", "")).lower()
+            if any(uses.startswith(action) for action in scanner_actions):
+                return True
+            if _commands(str(step.get("run", "")), scanner_command):
+                return True
+    return False
+
+
+def has_sca_configuration(scan: RepoScan) -> bool:
+    configs = (
+        ".github/dependabot.yml", ".github/dependabot.yaml",
+        "renovate.json", ".renovaterc",
+    )
+    enabled = False
+    for path in configs:
+        if path not in scan.files:
+            continue
+        try:
+            data = yaml.safe_load(scan.read_text(path))
+        except yaml.YAMLError:
+            continue
+        updates = data.get("updates") if isinstance(data, dict) else None
+        if isinstance(updates, list) and any(
+            isinstance(item, dict)
+            and isinstance(item.get("package-ecosystem"), str)
+            and item["package-ecosystem"].strip()
+            and isinstance(item.get("directory"), str)
+            and item["directory"].strip()
+            and isinstance(item.get("schedule"), dict)
+            and item["schedule"].get("interval") in {"daily", "weekly", "monthly"}
+            for item in updates
+        ):
+            enabled = True
+            break
+    if not enabled:
+        return False
+
+    for workflow in scan.workflows:
+        if "pull_request" not in _workflow_triggers(workflow):
+            continue
+        for step in _workflow_steps(workflow):
+            uses = str(step.get("uses", "")).lower()
+            config = step.get("with", {})
+            if uses.startswith("actions/dependency-review-action@") \
+                    and isinstance(config, dict) \
+                    and str(config.get("fail-on-severity", "")).lower() == "critical":
+                return True
+            if uses.startswith("aquasecurity/trivy-action@") and isinstance(config, dict) \
+                    and str(config.get("severity", "")).upper().find("CRITICAL") >= 0 \
+                    and str(config.get("exit-code", "")) == "1":
+                return True
+            run = str(step.get("run", ""))
+            if _commands(
+                run,
+                r"^\s*(?:npm\s+audit\s+--audit-level=critical|pip-audit|"
+                r"snyk\s+test\s+--severity-threshold=critical|osv-scanner)\b",
+            ):
+                return True
     return False
 
 

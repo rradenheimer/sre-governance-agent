@@ -5,6 +5,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: github/codeql-action/analyze@v3
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: critical
   iac-scan:
     runs-on: ubuntu-latest
     steps:
@@ -17,3 +20,5 @@ jobs:
         run: ./deploy.sh --canary
       - name: Generate SBOM
         run: syft dir:. -o cyclonedx-json > sbom.json
+      - name: Publish release artifacts
+        run: gh release create v1 release.tar.gz sbom.json
