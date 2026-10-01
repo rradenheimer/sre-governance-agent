@@ -10,7 +10,9 @@
       "Read(**/*.pem)",
       "Read(**/id_rsa*)",
       "Write(.sre/audit.jsonl)",
-      "Edit(.sre/audit.jsonl)"
+      "Edit(.sre/audit.jsonl)",
+      "Write(.sre/audit.jsonl.head)",
+      "Edit(.sre/audit.jsonl.head)"
     ],
     "ask": [
       "Bash(git push:*)",

@@ -72,3 +72,26 @@ def test_audit_verification_rejects_missing_or_empty_log(tmp_path):
     ok, msg = AuditLogger(log).verify()
     assert not ok
     assert "empty" in msg
+
+
+def test_audit_verification_rejects_truncated_valid_prefix(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    logger = AuditLogger(log)
+    logger.record("scan", target="repo-a")
+    logger.record("report", target="repo-a")
+
+    log.write_text(log.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+    ok, msg = AuditLogger(log).verify()
+    assert not ok
+    assert "anchored head" in msg
+
+
+def test_audit_verification_requires_head_anchor(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    logger = AuditLogger(log)
+    logger.record("scan", target="repo-a")
+    logger.anchor_path.unlink()
+
+    ok, msg = AuditLogger(log).verify()
+    assert not ok
+    assert "anchor is missing" in msg

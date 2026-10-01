@@ -40,7 +40,7 @@ SENSITIVE_PATH_PATTERNS = [
     r"(?i)(?<![\w])(?:secrets?|credentials?)(?:[/\\][\w./\\-]+|[._-](?:ya?ml|json|toml|txt))",
 ]
 
-PROTECTED_WRITE = (".sre/audit.jsonl",)
+PROTECTED_WRITE = (".sre/audit.jsonl", ".sre/audit.jsonl.head")
 
 
 def _blob(tool_input: dict) -> str:

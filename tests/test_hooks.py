@@ -36,6 +36,12 @@ def test_secret_guard_blocks_audit_edit():
     assert r.returncode == 2
 
 
+def test_secret_guard_blocks_audit_anchor_edit():
+    r = _run(SECRET_GUARD, {"tool_name": "Edit",
+                            "tool_input": {"file_path": ".sre/audit.jsonl.head", "new_string": "x"}})
+    assert r.returncode == 2
+
+
 def test_secret_guard_blocks_force_push():
     r = _run(SECRET_GUARD, {"tool_name": "Bash",
                             "tool_input": {"command": "git push --force origin main"}})
@@ -56,7 +62,9 @@ def test_audit_logger_writes_verifiable_chain(tmp_path):
     _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {"file_path": "a.py"}}, cwd=tmp_path)
     _run(AUDIT_LOGGER, {"tool_name": "Bash", "tool_input": {"command": "ls"}}, cwd=tmp_path)
     audit = tmp_path / ".sre" / "audit.jsonl"
+    anchor = tmp_path / ".sre" / "audit.jsonl.head"
     assert audit.exists()
+    assert anchor.exists()
 
     # Verify with the engine's own verifier for cross-compatibility.
     sys.path.insert(0, str(ROOT / "src"))

@@ -71,6 +71,7 @@ jobs:
           path: |
             sre-reports/
             .sre/audit.jsonl
+            .sre/audit.jsonl.head
 
       - name: Comment report on PR
         if: github.event_name == 'pull_request'

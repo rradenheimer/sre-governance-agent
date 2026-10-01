@@ -43,6 +43,7 @@ class AuditEvent:
 class AuditLogger:
     def __init__(self, path: str | Path, actor: str = "sre-governance-agent"):
         self.path = Path(path)
+        self.anchor_path = self.path.with_suffix(self.path.suffix + ".head")
         self.actor = actor
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -64,7 +65,14 @@ class AuditLogger:
         event.hash = event.compute_hash()
         with self.path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(asdict(event), sort_keys=True) + "\n")
+        self._write_anchor()
         return event
+
+    def _write_anchor(self) -> None:
+        lines = [line.strip() for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        head_hash = json.loads(lines[-1])["hash"]
+        anchor = {"record_count": len(lines), "head_hash": head_hash}
+        self.anchor_path.write_text(json.dumps(anchor, sort_keys=True) + "\n", encoding="utf-8")
 
     def verify(self) -> tuple[bool, str]:
         """Verify the hash chain. Returns (ok, message)."""
@@ -83,6 +91,14 @@ class AuditLogger:
             if event.compute_hash() != stored:
                 return False, f"tampered record {i}: hash mismatch"
             prev = stored
+        if not self.anchor_path.exists():
+            return False, "audit head anchor is missing"
+        try:
+            anchor = json.loads(self.anchor_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            return False, "audit head anchor is invalid"
+        if anchor.get("record_count") != len(lines) or anchor.get("head_hash") != prev:
+            return False, "audit log does not match its anchored head"
         return True, "audit chain intact"
 
 
