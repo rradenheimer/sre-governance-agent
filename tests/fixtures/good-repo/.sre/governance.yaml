@@ -9,6 +9,10 @@ security:
   secret_scanning: true
 sre:
   error_budget_policy_defined: true
-  dr_tested: true
+  disaster_recovery:
+    rpo: 4h
+    rto: 8h
+    test_cadence: quarterly
+    last_tested: 2026-10-01
   toil_budget_pct: 50
   oncall_defined: true

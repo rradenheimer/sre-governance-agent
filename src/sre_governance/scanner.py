@@ -12,8 +12,10 @@ from the GitHub API by the pipeline before invoking the engine.
 from __future__ import annotations
 
 import re
+import shlex
 import subprocess
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -241,21 +243,43 @@ def has_safe_change_workflow(scan: RepoScan) -> bool:
     for workflow in scan.workflows:
         if not _workflow_triggers(workflow).intersection({"push", "workflow_dispatch", "release"}):
             continue
-        for step in _workflow_steps(workflow):
-            uses = str(step.get("uses", "")).lower()
-            run = str(step.get("run", ""))
-            if any(uses.startswith(action) for action in deploy_actions):
+        jobs = workflow.get("jobs", {})
+        if not isinstance(jobs, dict):
+            continue
+        for job in jobs.values():
+            if not isinstance(job, dict):
+                continue
+            steps = job.get("steps", [])
+            if not isinstance(steps, list):
+                continue
+            deployment = staged = tested = promoted = rolled_back = False
+            for step in steps:
+                if not isinstance(step, dict):
+                    continue
+                uses = str(step.get("uses", "")).lower()
+                run = str(step.get("run", ""))
                 config = step.get("with", {})
-                if isinstance(config, dict) and any(
-                    rollout.search(f"{key} {value}") for key, value in config.items()
-                ):
-                    return True
-            if _commands(run, deploy_command, rollout.pattern):
-                return True
-            if _commands(
-                run,
-                r"^\s*gh\s+release\s+create\b",
-                r"(?:--prerelease|--draft)\b",
+                if any(uses.startswith(action) for action in deploy_actions):
+                    deployment = True
+                    if isinstance(config, dict) and any(
+                        rollout.search(f"{key} {value}") for key, value in config.items()
+                    ):
+                        staged = True
+                if _commands(run, deploy_command):
+                    deployment = True
+                    staged |= bool(rollout.search(run))
+                tested |= _commands(
+                    run, r"^\s*(?:pytest|tox|npm\s+test|yarn\s+test|pnpm\s+test|go\s+test|cargo\s+test)\b"
+                )
+                promoted |= _commands(
+                    run, r"^\s*(?:kubectl\s+rollout\s+resume|helm\s+upgrade|[\w./-]*promote[\w./-]*)\b"
+                )
+                rolled_back |= _commands(
+                    run, r"^\s*(?:kubectl\s+rollout\s+undo|helm\s+rollback|[\w./-]*rollback[\w./-]*)\b"
+                )
+            if (
+                deployment and staged and tested and promoted and rolled_back
+                and job.get("environment")
             ):
                 return True
     return False
@@ -269,29 +293,68 @@ def has_sbom_workflow(scan: RepoScan) -> bool:
         if not triggers.intersection({"release", "workflow_dispatch"}) and not tagged_release:
             continue
         steps = list(_workflow_steps(workflow))
-        generated = False
-        published = False
+        generated_paths: set[str] = set()
+        published_patterns: set[str] = set()
         for step in steps:
             uses = str(step.get("uses", "")).lower()
             run = str(step.get("run", ""))
             config = step.get("with", {})
             if uses.startswith("anchore/sbom-action@") and isinstance(config, dict) \
                     and config.get("output-file"):
-                generated = True
-            if _commands(
-                run,
-                r"^\s*(?:syft|cyclonedx|trivy\s+fs)\b",
-                r"(?:>|--output|--format)",
-            ):
-                generated = True
-            if _commands(run, r"^\s*gh\s+release\s+(?:create|upload)\b") or (
-                uses.startswith(("softprops/action-gh-release@", "ncipollo/release-action@"))
-                and isinstance(config, dict) and config.get("files")
-            ):
-                published = True
-        if generated and published:
+                generated_paths.add(str(config["output-file"]).strip())
+            for command in _command_lines(run):
+                if re.match(r"^\s*(?:syft|cyclonedx|trivy\s+fs)\b", command, re.IGNORECASE):
+                    output = re.search(
+                        r"(?:>\s*|--output(?:=|\s+))([^\s;&|]+)", command, re.IGNORECASE,
+                    )
+                    if output:
+                        generated_paths.add(output.group(1).strip("'\""))
+                if re.match(r"^\s*gh\s+release\s+(?:create|upload)\b", command, re.IGNORECASE):
+                    try:
+                        tokens = shlex.split(command)
+                    except ValueError:
+                        continue
+                    command_index = next(
+                        (i for i, token in enumerate(tokens)
+                         if token == "release" and i > 0 and tokens[i - 1] == "gh"),
+                        -1,
+                    )
+                    if command_index >= 0:
+                        for token in tokens[command_index + 2:]:
+                            if not token.startswith("-"):
+                                published_patterns.add(token)
+            if uses.startswith(("softprops/action-gh-release@", "ncipollo/release-action@")) \
+                    and isinstance(config, dict) and config.get("files"):
+                files = config["files"]
+                if isinstance(files, str):
+                    published_patterns.update(
+                        line.strip() for line in files.splitlines() if line.strip()
+                    )
+                elif isinstance(files, list):
+                    published_patterns.update(
+                        str(path).strip() for path in files if str(path).strip()
+                    )
+        if any(
+            fnmatchcase(generated, published)
+            for generated in generated_paths for published in published_patterns
+        ):
             return True
     return False
+
+
+def _command_lines(run: str):
+    lines = run.splitlines()
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        index += 1
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        command = line
+        while command.rstrip().endswith("\\") and index < len(lines):
+            command = command.rstrip()[:-1] + " " + lines[index].strip()
+            index += 1
+        yield command
 
 
 def has_iac_workflow(scan: RepoScan) -> bool:
@@ -326,21 +389,26 @@ def has_sca_configuration(scan: RepoScan) -> bool:
             data = yaml.safe_load(scan.read_text(path))
         except yaml.YAMLError:
             continue
-        updates = data.get("updates") if isinstance(data, dict) else None
-        if isinstance(updates, list) and any(
-            isinstance(item, dict)
-            and isinstance(item.get("package-ecosystem"), str)
-            and item["package-ecosystem"].strip()
-            and isinstance(item.get("directory"), str)
-            and item["directory"].strip()
-            and isinstance(item.get("schedule"), dict)
-            and item["schedule"].get("interval") in {"daily", "weekly", "monthly"}
-            for item in updates
-        ):
+        if path.endswith(("dependabot.yml", "dependabot.yaml")):
+            updates = data.get("updates") if isinstance(data, dict) else None
+            configured = isinstance(updates, list) and any(
+                isinstance(item, dict)
+                and isinstance(item.get("package-ecosystem"), str)
+                and item["package-ecosystem"].strip()
+                and isinstance(item.get("directory"), str)
+                and item["directory"].strip()
+                and isinstance(item.get("schedule"), dict)
+                and item["schedule"].get("interval") in {"daily", "weekly", "monthly"}
+                for item in updates
+            )
+        else:
+            configured = _renovate_enabled(data)
+        if configured:
             enabled = True
             break
     if not enabled:
         return False
+
 
     for workflow in scan.workflows:
         if "pull_request" not in _workflow_triggers(workflow):
@@ -363,6 +431,30 @@ def has_sca_configuration(scan: RepoScan) -> bool:
                 r"snyk\s+test\s+--severity-threshold=critical|osv-scanner)\b",
             ):
                 return True
+    return False
+
+
+def _renovate_enabled(data: Any) -> bool:
+    if not isinstance(data, dict) or data.get("enabled") is False:
+        return False
+    managers = data.get("enabledManagers")
+    if isinstance(managers, list) and any(
+        isinstance(manager, str) and manager.strip() for manager in managers
+    ):
+        return True
+    extends = data.get("extends")
+    if isinstance(extends, list) and any(
+        isinstance(preset, str) and preset.strip() for preset in extends
+    ):
+        return True
+    rules = data.get("packageRules")
+    if isinstance(rules, list) and any(
+        isinstance(rule, dict)
+        and rule.get("enabled") is not False
+        and any(rule.get(key) for key in ("matchManagers", "matchPackageNames", "matchDatasources"))
+        for rule in rules
+    ):
+        return True
     return False
 
 

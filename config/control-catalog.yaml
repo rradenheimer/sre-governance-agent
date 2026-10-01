@@ -106,9 +106,8 @@ controls:
     description: RPO/RTO documented with a recovery test cadence.
     rationale: Untested backups are not backups.
     check:
-      type: metadata_true
-      key: sre.dr_tested
-    remediation: Declare dr_tested with RPO/RTO and last recovery-test date in .sre/governance.yaml.
+      type: dr_configured
+    remediation: Declare sre.disaster_recovery RPO, RTO, test cadence, and last recovery-test date in .sre/governance.yaml.
     mappings:
       NIST-800-53: ["CP-9", "CP-10"]
       SOC2: ["A1.2"]

@@ -40,23 +40,45 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BRANCH="${GITHUB_HEAD_REF:-$GITHUB_REF_NAME}"
-          PRIOR_RUN="$(gh run list --workflow sre-governance.yml --branch "$BRANCH" \
-            --status completed --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
-          if [ -n "$PRIOR_RUN" ]; then
-            mkdir -p "$RUNNER_TEMP/sre-governance-audit"
-            if gh run download "$PRIOR_RUN" --name sre-governance-audit \
-              --dir "$RUNNER_TEMP/sre-governance-audit"; then
-              tar -xzf "$RUNNER_TEMP/sre-governance-audit/audit-chain.tar.gz" -C .
-            else
-              mkdir -p "$RUNNER_TEMP/sre-governance-reports"
-              if gh run download "$PRIOR_RUN" --name sre-governance-reports \
-                --dir "$RUNNER_TEMP/sre-governance-reports"; then
-                cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl" .sre/audit.jsonl
-                cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl.head" .sre/audit.jsonl.head
-              else
-                echo "::notice::No prior audit artifact found; starting with the checked-in audit chain."
+          PRIOR_RUNS="$(gh run list --workflow sre-governance.yml --branch "$BRANCH" \
+            --status completed --limit 100 --json databaseId --jq '.[].databaseId')"
+          if [ -n "$PRIOR_RUNS" ]; then
+            RESTORED=false
+            for PRIOR_RUN in $PRIOR_RUNS; do
+              CANDIDATE="$RUNNER_TEMP/sre-governance-audit-$PRIOR_RUN"
+              mkdir -p "$CANDIDATE"
+              if gh run download "$PRIOR_RUN" --name sre-governance-audit \
+                --dir "$CANDIDATE/durable" >/dev/null 2>&1; then
+                ARCHIVE="$CANDIDATE/durable/audit-chain.tar.gz"
+                if tar -xOzf "$ARCHIVE" .sre/audit.jsonl > "$CANDIDATE/audit.jsonl" 2>/dev/null \
+                  && tar -xOzf "$ARCHIVE" .sre/audit.jsonl.head > "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
+                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
+                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
+                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
+                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
+                  RESTORED=true
+                  break
+                fi
               fi
+              if gh run download "$PRIOR_RUN" --name sre-governance-reports \
+                --dir "$CANDIDATE/reports" >/dev/null 2>&1; then
+                if cp "$CANDIDATE/reports/.sre/audit.jsonl" "$CANDIDATE/audit.jsonl" 2>/dev/null \
+                  && cp "$CANDIDATE/reports/.sre/audit.jsonl.head" "$CANDIDATE/audit.jsonl.head" 2>/dev/null \
+                  && PYTHONPATH=src python -m sre_governance.cli verify-audit \
+                    --audit "$CANDIDATE/audit.jsonl" >/dev/null; then
+                  cp "$CANDIDATE/audit.jsonl" .sre/audit.jsonl
+                  cp "$CANDIDATE/audit.jsonl.head" .sre/audit.jsonl.head
+                  RESTORED=true
+                  break
+                fi
+              fi
+            done
+            if [ "$RESTORED" != true ]; then
+              echo "::error::No valid prior audit artifact found; refusing to reset audit history."
+              exit 1
             fi
+          else
+            echo "::notice::No prior audit run found; starting with the checked-in audit chain."
           fi
 
       - name: Resolve profile

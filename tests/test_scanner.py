@@ -117,12 +117,31 @@ jobs:
       - uses: bridgecrewio/checkov-action@v12
       - run: ./deploy.sh --canary
       - run: syft dir:. -o cyclonedx-json > sbom.json
-      - run: gh release create v1 release.tar.gz sbom.json
+      - run: gh release create v1 release.tar.gz archive.tar.gz
 """,
         encoding="utf-8",
     )
     scan = scan_repo(tmp_path)
     assert has_iac_workflow(scan)
+    assert not has_safe_change_workflow(scan)
+    assert not has_sbom_workflow(scan)
+
+    workflow.write_text(
+        """on: [workflow_dispatch]
+jobs:
+  deploy:
+    environment: production
+    steps:
+      - run: pytest -q
+      - run: kubectl apply --canary -f deployment.yaml
+      - run: kubectl rollout resume deployment/api
+      - run: kubectl rollout undo deployment/api
+      - run: syft dir:. -o cyclonedx-json > sbom.json
+      - run: gh release create v1 release.tar.gz sbom.json
+""",
+        encoding="utf-8",
+    )
+    scan = scan_repo(tmp_path)
     assert has_safe_change_workflow(scan)
     assert has_sbom_workflow(scan)
 
@@ -161,4 +180,27 @@ jobs:
         workflow.read_text(encoding="utf-8").replace("critical", "high"),
         encoding="utf-8",
     )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+
+def test_sca_recognizes_enabled_renovate_configuration(tmp_path):
+    renovate = tmp_path / "renovate.json"
+    renovate.write_text('{"extends": ["config:recommended"]}', encoding="utf-8")
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "ci.yml").write_text(
+        """on: [pull_request]
+jobs:
+  review:
+    steps:
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: critical
+""",
+        encoding="utf-8",
+    )
+
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    renovate.write_text('{"enabledManagers": []}', encoding="utf-8")
     assert not has_sca_configuration(scan_repo(tmp_path))

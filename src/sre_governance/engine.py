@@ -6,6 +6,7 @@ overall Assessment (score + policy gate). No AI, no network, no randomness.
 from __future__ import annotations
 
 import re
+from datetime import date
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -150,6 +151,32 @@ def _check_metadata_gte(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, s
     return False, f"{key}={val!r} < {threshold}"
 
 
+def _check_dr_configured(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    recovery = scan.metadata_value("sre.disaster_recovery")
+    if not isinstance(recovery, dict):
+        return False, "sre.disaster_recovery must declare RPO, RTO, test cadence, and last test date"
+    for key in ("rpo", "rto"):
+        value = recovery.get(key)
+        if not isinstance(value, str) or not re.fullmatch(
+            r"\s*[1-9]\d*\s*(?:m|h|d|w)\s*", value, re.IGNORECASE
+        ):
+            return False, f"sre.disaster_recovery.{key} must be a positive duration (for example, 4h)"
+    if recovery.get("test_cadence") not in {
+        "weekly", "monthly", "quarterly", "annually",
+    }:
+        return False, "sre.disaster_recovery.test_cadence must declare a supported recovery-test cadence"
+    tested = recovery.get("last_tested")
+    if isinstance(tested, date):
+        return True, "RPO, RTO, recovery-test cadence, and last test date are declared"
+    if not isinstance(tested, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", tested):
+        return False, "sre.disaster_recovery.last_tested must be an ISO date"
+    try:
+        date.fromisoformat(tested)
+    except ValueError:
+        return False, "sre.disaster_recovery.last_tested must be an ISO date"
+    return True, "RPO, RTO, recovery-test cadence, and last test date are declared"
+
+
 def _check_slo_configured(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     candidates = params.get("any_of", [])
     paths = [
@@ -217,6 +244,7 @@ CHECKS: dict[str, CheckFn] = {
     "metadata_in": _check_metadata_in,
     "slo_configured": _check_slo_configured,
     "audit_log_verified": _check_audit_log_verified,
+    "dr_configured": _check_dr_configured,
 }
 
 

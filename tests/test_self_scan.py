@@ -16,12 +16,17 @@ def test_commercial_self_scan_does_not_overstate_missing_evidence():
 
     assert assessment.gate.compliant, assessment.gate.reasons
     results = {result.control_id: result for result in assessment.results}
-    assert all(result.status == PASS for result in assessment.results), {
-        result.control_id: result.reason for result in assessment.results if result.status != PASS
+    assert all(
+        result.status == PASS for result in assessment.results
+        if result.control_id != "SRE-CHG-005"
+    ), {
+        result.control_id: result.reason for result in assessment.results
+        if result.status != PASS and result.control_id != "SRE-CHG-005"
     }
+    assert results["SRE-CHG-005"].status != PASS
     for control_id in (
         "GOV-BP-010", "GOV-REV-011", "GOV-SIGN-013", "SEC-SECRETS-020",
-        "SRE-CHG-005", "SEC-SBOM-023", "SEC-IAC-024", "CMP-AUDIT-033",
+        "SEC-SBOM-023", "SEC-IAC-024", "CMP-AUDIT-033",
     ):
         assert results[control_id].status == PASS, results[control_id].reason
 
@@ -53,6 +58,7 @@ def test_release_and_iac_workflows_have_real_gates():
     assert 'test "$(git rev-parse "$TAG^{tag}")" = "$TAG_OBJECT"' in promote_run
     assert any(".verification.verified" in step.get("run", "")
                and "git rev-parse" in step["run"] for step in candidate)
+    assert 'test "$(git rev-parse "$TAG^{tag}")" = "$TAG_OBJECT"' in candidate_run
     assert any("git archive" in step.get("run", "") for step in candidate)
     assert any(step.get("uses", "").startswith("anchore/sbom-action@")
                and step.get("with", {}).get("output-file")
@@ -103,7 +109,10 @@ def test_release_and_iac_workflows_have_real_gates():
         restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]
                        if step.get("name") == "Restore prior audit chain")
         assert "sre-governance-reports" in restore["run"]
-        assert "No prior audit artifact found" in restore["run"]
+        assert "--limit 100" in restore["run"]
+        assert "for PRIOR_RUN in $PRIOR_RUNS" in restore["run"]
+        assert "verify-audit" in restore["run"]
+        assert "No valid prior audit artifact found" in restore["run"]
         assert any(step.get("name") == "Persist audit chain for the next run"
                    for step in governance["jobs"]["governance-scan"]["steps"])
 

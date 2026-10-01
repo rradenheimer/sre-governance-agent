@@ -26,6 +26,7 @@ jobs:
           gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_OBJECT" --jq '.verification.verified' |
             grep -qx true
           git fetch origin tag "$TAG"
+          test "$(git rev-parse "$TAG^{tag}")" = "$TAG_OBJECT"
           test "$(git rev-parse "$TAG^{commit}")" = "$GITHUB_SHA"
       - name: Validate version and run tests
         run: |

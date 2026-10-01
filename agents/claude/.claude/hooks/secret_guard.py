@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import re
+import shlex
 import sys
 from pathlib import Path
 
@@ -43,6 +44,27 @@ SENSITIVE_PATH_PATTERNS = [
 ]
 
 PROTECTED_WRITE = (".sre/audit.jsonl", ".sre/audit.jsonl.head")
+READ_ONLY_COMMANDS = {"cat", "file", "head", "ls", "pwd", "stat", "tail"}
+READ_ONLY_GIT_COMMANDS = {"branch", "diff", "log", "ls-files", "rev-parse", "show", "status"}
+
+
+def _read_only_bash(command: str) -> bool:
+    if re.search(r"[;&|><`\r\n]|\$\(", command):
+        return False
+    try:
+        args = shlex.split(command)
+    except ValueError:
+        return False
+    if not args:
+        return False
+    if args[0] in READ_ONLY_COMMANDS:
+        return True
+    if args[0] != "git":
+        return False
+    index = 1
+    while index < len(args) and args[index] in {"-C", "-c", "--git-dir", "--work-tree"}:
+        index += 2
+    return index < len(args) and args[index] in READ_ONLY_GIT_COMMANDS
 
 
 def _suggest_only_profile() -> bool:
@@ -99,6 +121,12 @@ def main() -> int:
 
     if _suggest_only_profile() and payload.get("tool_name") in {"Edit", "Write", "MultiEdit"}:
         print("BLOCKED: the active profile is suggest_only; file edits are not permitted.",
+              file=sys.stderr)
+        return 2
+
+    if _suggest_only_profile() and payload.get("tool_name") == "Bash" \
+            and not _read_only_bash(str(tool_input.get("command", ""))):
+        print("BLOCKED: Bash is read-only for the active suggest_only profile.",
               file=sys.stderr)
         return 2
 

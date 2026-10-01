@@ -116,6 +116,37 @@ def test_boolean_metadata_does_not_pass_numeric_checks():
     assert statuses["SRE-TOIL-007"] == FAIL
 
 
+def test_disaster_recovery_requires_structured_evidence():
+    catalog, profiles = _ctx()
+    scan = merge_api_metadata(
+        scan_repo(GOOD), {"sre": {"dr_tested": True, "disaster_recovery": None}},
+    )
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
+    assert dr.status == FAIL
+
+    scan = merge_api_metadata(scan_repo(GOOD), {
+        "sre": {
+            "disaster_recovery": {
+                "rpo": "4h",
+                "rto": "8h",
+                "test_cadence": "quarterly",
+                "last_tested": "2026-10-01",
+            },
+        },
+    })
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
+    assert dr.status == PASS
+
+    scan = merge_api_metadata(scan, {
+        "sre": {"disaster_recovery": {"rpo": "0h"}},
+    })
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    dr = next(result for result in assessment.results if result.control_id == "SRE-DR-006")
+    assert dr.status == FAIL
+
+
 def test_slo_control_requires_a_valid_entry(tmp_path):
     catalog, profiles = _ctx()
     slo_file = tmp_path / ".sre" / "slo.yaml"

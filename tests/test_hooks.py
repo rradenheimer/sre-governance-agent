@@ -38,6 +38,32 @@ def test_secret_guard_blocks_edits_in_suggest_only_profile(tmp_path):
     assert "suggest_only" in result.stderr
 
 
+def test_secret_guard_allows_only_read_only_bash_in_suggest_only_profile(tmp_path):
+    profile = tmp_path / ".sre" / "profile"
+    profile.parent.mkdir()
+    profile.write_text("federal-defense\n", encoding="utf-8")
+
+    allowed = _run(
+        SECRET_GUARD,
+        {"tool_name": "Bash", "tool_input": {"command": "git status --short"}},
+        cwd=tmp_path,
+    )
+    blocked = _run(
+        SECRET_GUARD,
+        {"tool_name": "Bash", "tool_input": {"command": "printf test > .sre/governance.yaml"}},
+        cwd=tmp_path,
+    )
+    scripted = _run(
+        SECRET_GUARD,
+        {"tool_name": "Bash", "tool_input": {"command": "python -c 'Path(\"file\").write_text(\"x\")'"}},
+        cwd=tmp_path,
+    )
+
+    assert allowed.returncode == 0
+    assert blocked.returncode == 2
+    assert scripted.returncode == 2
+
+
 def test_read_only_mode_does_not_grant_editing():
     settings = json.loads(
         (ROOT / "agents" / "claude" / ".claude" / "settings.json").read_text(encoding="utf-8")
