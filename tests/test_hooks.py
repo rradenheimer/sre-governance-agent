@@ -42,6 +42,39 @@ def test_secret_guard_blocks_force_push():
     assert r.returncode == 2
 
 
+def test_secret_guard_blocks_force_push_options_after_refspec():
+    for command in (
+        "git push origin main --force",
+        "git push origin main -f",
+        "git push origin +main",
+        "git -C repo push origin main --force-with-lease",
+    ):
+        r = _run(SECRET_GUARD, {"tool_name": "Bash", "tool_input": {"command": command}})
+        assert r.returncode == 2, command
+
+
+def test_secret_guard_blocks_bash_audit_log_mutations():
+    for command in (
+        "rm .sre/audit.jsonl",
+        "echo reset > .sre/audit.jsonl",
+        "mv .sre/audit.jsonl /tmp/audit.jsonl",
+        "python -c \"open('.sre/audit.jsonl', 'w').write('reset')\"",
+    ):
+        r = _run(SECRET_GUARD, {"tool_name": "Bash", "tool_input": {"command": command}})
+        assert r.returncode == 2, command
+
+
+def test_secret_guard_allows_read_only_audit_verification():
+    r = _run(
+        SECRET_GUARD,
+        {"tool_name": "Bash", "tool_input": {
+            "command": "PYTHONPATH=src python -m sre_governance.cli "
+                       "verify-audit --audit .sre/audit.jsonl",
+        }},
+    )
+    assert r.returncode == 0
+
+
 def test_audit_logger_writes_verifiable_chain(tmp_path):
     _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {"file_path": "a.py"}}, cwd=tmp_path)
     _run(AUDIT_LOGGER, {"tool_name": "Bash", "tool_input": {"command": "ls"}}, cwd=tmp_path)

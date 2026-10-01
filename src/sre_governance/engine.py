@@ -45,10 +45,12 @@ class Gate:
     compliant: bool
     enforcement: str             # blocking | warning
     reasons: list[str]
+    has_critical_blocking_failure: bool = False
 
     @property
     def should_fail_pipeline(self) -> bool:
-        return self.enforcement == "blocking" and not self.compliant
+        return ((self.enforcement == "blocking" and not self.compliant)
+                or self.has_critical_blocking_failure)
 
 
 @dataclass(frozen=True)
@@ -85,6 +87,10 @@ def _check_file_absent(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, st
 
 def _check_workflow_present(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     keywords = params.get("keywords", [])
+    if params.get("semantic") == "sast_analyzer":
+        if scan.sast_analyzer_present:
+            return True, "workflow invokes a recognized SAST analyzer"
+        return False, "no workflow invokes a recognized SAST analyzer"
     if keyword_in_workflows(scan, keywords):
         return True, f"workflow references one of {keywords}"
     return False, f"no workflow references any of {keywords}"
@@ -102,7 +108,7 @@ def _check_content_match(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, 
 def _check_metadata_true(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     key = params["key"]
     val = scan.metadata_value(key)
-    if bool(val) is True:
+    if val is True:
         return True, f"{key} is true"
     return False, f"{key} is not true (got {val!r})"
 
@@ -216,7 +222,12 @@ def _gate(results: list[Result], score: float, profile: Profile) -> Gate:
     if score < min_score:
         reasons.append(f"compliance score {score} below minimum {min_score}")
 
-    return Gate(compliant=not reasons, enforcement=profile.enforcement, reasons=reasons)
+    return Gate(
+        compliant=not reasons,
+        enforcement=profile.enforcement,
+        reasons=reasons,
+        has_critical_blocking_failure=crit_fail > 0,
+    )
 
 
 def _summarize(results: list[Result], score: float) -> dict[str, Any]:

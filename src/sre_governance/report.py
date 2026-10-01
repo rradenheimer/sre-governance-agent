@@ -135,12 +135,6 @@ def render_sarif(assessment: Assessment) -> str:
                 "ruleId": r.control_id,
                 "level": sarif_level.get(r.severity, "warning"),
                 "message": {"text": f"{r.title}: {r.reason}. Remediation: {r.remediation}"},
-                "locations": [{
-                    "physicalLocation": {
-                        "artifactLocation": {"uri": ".sre/governance.yaml"},
-                        "region": {"startLine": 1},
-                    }
-                }],
             })
     sarif = {
         "$schema": "https://json.schemastore.org/sarif-2.1.0.json",

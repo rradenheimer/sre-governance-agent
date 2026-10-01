@@ -235,6 +235,7 @@ controls:
     rationale: Early defect detection lowers cost and risk.
     check:
       type: workflow_present
+      semantic: sast_analyzer
       keywords: ["codeql", "sast", "semgrep", "code-scanning", "snyk", "bandit"]
     remediation: Add a SAST/code-scanning workflow (e.g., CodeQL) gating merges.
     mappings:

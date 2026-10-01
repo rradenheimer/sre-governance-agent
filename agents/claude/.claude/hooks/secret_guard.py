@@ -10,7 +10,9 @@ This is a transparency/safety guardrail that works for every industry profile.
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
 import sys
 
 # High-signal secret patterns. Deliberately conservative to avoid false blocks.
@@ -26,12 +28,89 @@ SECRET_PATTERNS = [
 
 # Commands that are never allowed from the agent.
 FORBIDDEN_CMD = [
-    r"git\s+push\s+(--force|-f)\b",
     r"\bgh\s+pr\s+(merge|review\s+--approve)\b",
     r"rm\s+-rf\s+/(?!\w)",
 ]
 
 PROTECTED_WRITE = (".sre/audit.jsonl",)
+READ_ONLY_AUDIT_COMMANDS = {"cat", "diff", "file", "grep", "head", "less",
+                            "sha256sum", "stat", "tail", "wc"}
+
+
+def _shell_tokens(command: str) -> list[str]:
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|<>")
+    lexer.whitespace_split = True
+    lexer.commenters = ""
+    return list(lexer)
+
+
+def _is_force_push(command: str) -> bool:
+    try:
+        tokens = _shell_tokens(command)
+    except ValueError:
+        return False
+
+    separators = {";", "&&", "||", "|", "&"}
+    for index, token in enumerate(tokens):
+        if os.path.basename(token) != "git":
+            continue
+
+        command_index = index + 1
+        while command_index < len(tokens) and tokens[command_index] not in separators:
+            option = tokens[command_index]
+            if option == "push":
+                args = []
+                for arg in tokens[command_index + 1:]:
+                    if arg in separators:
+                        break
+                    args.append(arg)
+                if any(arg in {"--force", "--force-with-lease", "--force-if-includes", "-f"}
+                       or arg.startswith(("--force=", "--force-with-lease="))
+                       or (not arg.startswith("-") and arg.startswith("+"))
+                       for arg in args):
+                    return True
+                break
+            if option.startswith("-"):
+                command_index += 2 if option in {"-C", "-c", "--git-dir",
+                                                 "--work-tree", "--namespace"} else 1
+            else:
+                break
+    return False
+
+
+def _references_protected_audit(command: str) -> bool:
+    normalized = command.replace("\\", "/")
+    return any(
+        re.search(
+            rf"(?:^|[\s\"'=])(?:[^\s\"';|&<>]*/)?{re.escape(path)}(?=$|[\s\"';|&<>])",
+            normalized,
+        )
+        for path in PROTECTED_WRITE
+    )
+
+
+def _is_read_only_audit_command(command: str) -> bool:
+    try:
+        tokens = _shell_tokens(command)
+    except ValueError:
+        return False
+    if any(token in {";", "&&", "||", "|", "&", ">", ">>", ">|", "&>", "<"}
+           for token in tokens):
+        return False
+
+    index = 0
+    while index < len(tokens) and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*=.*", tokens[index]):
+        index += 1
+    args = tokens[index:]
+    if len(args) >= 4 and os.path.basename(args[0]) in {"python", "python3"}:
+        if args[1:4] == ["-m", "sre_governance.cli", "verify-audit"]:
+            return True
+    return bool(args and os.path.basename(args[0]) in READ_ONLY_AUDIT_COMMANDS)
+
+
+def _bash_mutates_protected_audit(command: str) -> bool:
+    return (_references_protected_audit(command)
+            and not _is_read_only_audit_command(command))
 
 
 def _blob(tool_input: dict) -> str:
@@ -56,6 +135,17 @@ def main() -> int:
     if any(target.replace("\\", "/").endswith(p) for p in PROTECTED_WRITE):
         print("BLOCKED: the audit log (.sre/audit.jsonl) is append-only and may "
               "not be edited by the agent.", file=sys.stderr)
+        return 2
+
+    command = tool_input.get("command")
+    if isinstance(command, str) and _bash_mutates_protected_audit(command):
+        print("BLOCKED: Bash commands may not modify the append-only audit log "
+              "(.sre/audit.jsonl).", file=sys.stderr)
+        return 2
+
+    if isinstance(command, str) and _is_force_push(command):
+        print("BLOCKED: changes must land via reviewed pull request; "
+              "never force-push.", file=sys.stderr)
         return 2
 
     for pat in FORBIDDEN_CMD:

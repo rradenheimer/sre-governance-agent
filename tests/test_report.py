@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "config" / "control-catalog.yaml"
 PROFILES = ROOT / "config" / "industry-profiles"
 GOOD = ROOT / "tests" / "fixtures" / "good-repo"
+BAD = ROOT / "tests" / "fixtures" / "bad-repo"
 
 
 def _assessment():
@@ -40,6 +41,15 @@ def test_sarif_is_valid_schema_shape():
     sarif = json.loads(render_sarif(assessment))
     assert sarif["version"] == "2.1.0"
     assert sarif["runs"][0]["tool"]["driver"]["name"] == "SRE-Governance-Agent"
+
+
+def test_sarif_omits_inaccurate_file_locations():
+    catalog = load_catalog(CATALOG)
+    profile = load_profiles(PROFILES)["commercial"]
+    assessment = evaluate(scan_repo(BAD), catalog, profile)
+    results = json.loads(render_sarif(assessment))["runs"][0]["results"]
+    assert results
+    assert all("locations" not in result for result in results)
 
 
 def test_audit_chain_detects_tampering(tmp_path):

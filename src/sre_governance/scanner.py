@@ -21,6 +21,19 @@ import yaml
 _IGNORE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", "build", ".mypy_cache"}
 _WORKFLOW_GLOBS = (".github/workflows/*.yml", ".github/workflows/*.yaml")
 _METADATA_PATHS = (".sre/governance.yaml", ".sre/governance.yml")
+_SAST_ACTIONS = {
+    "github/codeql-action/analyze",
+    "returntocorp/semgrep-action",
+    "semgrep/semgrep-action",
+    "sonarsource/sonarcloud-github-action",
+    "sonarsource/sonarqube-scan-action",
+}
+_SAST_COMMAND = re.compile(
+    r"(?m)(?:^|[;&|]\s*)(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:sudo\s+)?"
+    r"(?:semgrep(?:\s+(?:scan|ci)\b|\s+--config(?:\s|=))|"
+    r"bandit(?:\s+-r\b|\s+--recursive\b)|"
+    r"snyk\s+code\s+test\b)"
+)
 
 
 @dataclass
@@ -29,6 +42,7 @@ class RepoScan:
     files: set[str] = field(default_factory=set)
     dirs: set[str] = field(default_factory=set)
     workflow_text: str = ""
+    sast_analyzer_present: bool = False
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def has_path(self, candidate: str) -> bool:
@@ -74,7 +88,10 @@ def scan_repo(root: str | Path) -> RepoScan:
     parts: list[str] = []
     for pattern in _WORKFLOW_GLOBS:
         for wf in sorted(root.glob(pattern)):
-            parts.append(wf.read_text(encoding="utf-8", errors="replace"))
+            text = wf.read_text(encoding="utf-8", errors="replace")
+            parts.append(text)
+            if _workflow_uses_sast_analyzer(text):
+                scan.sast_analyzer_present = True
     scan.workflow_text = "\n".join(parts).lower()
 
     # Declared governance metadata.
@@ -115,3 +132,29 @@ def _deep_merge(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]
 
 def keyword_in_workflows(scan: RepoScan, keywords: list[str]) -> bool:
     return any(re.search(re.escape(k.lower()), scan.workflow_text) for k in keywords)
+
+
+def _workflow_uses_sast_analyzer(text: str) -> bool:
+    try:
+        workflow = yaml.safe_load(text) or {}
+    except yaml.YAMLError:
+        return False
+    jobs = workflow.get("jobs", {}) if isinstance(workflow, dict) else {}
+    if not isinstance(jobs, dict):
+        return False
+    for job in jobs.values():
+        if not isinstance(job, dict):
+            continue
+        steps = job.get("steps", [])
+        if not isinstance(steps, list):
+            continue
+        for step in steps:
+            if not isinstance(step, dict):
+                continue
+            action = step.get("uses", "")
+            if isinstance(action, str) and action.lower().split("@", 1)[0] in _SAST_ACTIONS:
+                return True
+            command = step.get("run", "")
+            if isinstance(command, str) and _SAST_COMMAND.search(command):
+                return True
+    return False

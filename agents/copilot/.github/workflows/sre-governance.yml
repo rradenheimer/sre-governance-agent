@@ -23,6 +23,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: python
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -55,6 +60,9 @@ jobs:
 
       - name: Verify audit chain
         run: PYTHONPATH=src python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
+
+      - name: Analyze with CodeQL
+        uses: github/codeql-action/analyze@v3
 
       - name: Upload SARIF to Security tab
         if: always()
