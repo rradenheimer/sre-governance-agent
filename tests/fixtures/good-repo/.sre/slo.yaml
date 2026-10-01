@@ -1,0 +1,11 @@
+service: payments-api
+owner: team-payments
+slos:
+  - name: availability
+    sli: successful_requests / total_requests
+    objective: 99.9
+    window: 30d
+  - name: latency-p99
+    sli: requests_under_300ms / total_requests
+    objective: 99.0
+    window: 30d

@@ -1,0 +1,471 @@
+{
+  "provenance": {
+    "generator": "sre-governance-agent",
+    "generated_at": "2026-10-01T20:21:04.062258+00:00",
+    "profile": "commercial",
+    "catalog_version": "1.0.0",
+    "compliance_score": 100.0,
+    "runtime": {
+      "python": "3.14.7",
+      "platform": "Windows-11-10.0.26200-SP0",
+      "ci": false
+    }
+  },
+  "repo": "C:\\Users\\rrade\\.copilot\\chats\\e0b7f971-17e2-4e54-b244-970a5a0cd9e3\\sre-governance-agent",
+  "profile": "commercial",
+  "score": 100.0,
+  "gate": {
+    "compliant": true,
+    "enforcement": "warning",
+    "should_fail_pipeline": false,
+    "reasons": []
+  },
+  "summary": {
+    "total_controls": 21,
+    "passed": 21,
+    "failed": 0,
+    "not_applicable": 0,
+    "failures_by_severity": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "blocking_failures": 0,
+    "compliance_score": 100.0
+  },
+  "results": [
+    {
+      "control_id": "SRE-SLO-001",
+      "title": "Service Level Objectives are defined and version-controlled",
+      "category": "reliability",
+      "severity": "critical",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "found .sre/slo.yaml",
+      "remediation": "Add a .sre/slo.yaml declaring SLIs, SLO targets, and measurement windows.",
+      "mappings": {
+        "NIST-800-53": [
+          "CP-2",
+          "SA-4"
+        ],
+        "SOC2": [
+          "A1.1"
+        ],
+        "DORA-EU": [
+          "Art.6"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-EB-002",
+      "title": "Error budget policy is documented",
+      "category": "reliability",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "sre.error_budget_policy_defined is true",
+      "remediation": "Declare error_budget_policy_defined and the freeze policy in .sre/governance.yaml.",
+      "mappings": {
+        "NIST-800-53": [
+          "CP-2"
+        ],
+        "SOC2": [
+          "A1.1"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-INC-003",
+      "title": "Incident management + blameless postmortem process exists",
+      "category": "reliability",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found docs/incident-response.md",
+      "remediation": "Add an incident-response doc and a blameless postmortem template.",
+      "mappings": {
+        "NIST-800-53": [
+          "IR-4",
+          "IR-8"
+        ],
+        "SOC2": [
+          "CC7.3",
+          "CC7.4"
+        ],
+        "HIPAA": [
+          "164.308(a)(6)"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-OBS-004",
+      "title": "Observability (metrics/logs/traces) is configured as code",
+      "category": "observability",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found observability/",
+      "remediation": "Add observability-as-code (alerts/dashboards) tied to your SLIs.",
+      "mappings": {
+        "NIST-800-53": [
+          "AU-6",
+          "SI-4"
+        ],
+        "SOC2": [
+          "CC7.1",
+          "CC7.2"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-CHG-005",
+      "title": "Progressive/safe change management is enforced in CI",
+      "category": "reliability",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "workflow references one of ['deploy', 'release', 'rollout', 'canary']",
+      "remediation": "Add a deployment workflow with staged rollout and automated rollback.",
+      "mappings": {
+        "NIST-800-53": [
+          "CM-3",
+          "CM-4"
+        ],
+        "NIST-SSDF": [
+          "PO.3",
+          "PW.6"
+        ],
+        "SOC2": [
+          "CC8.1"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-DR-006",
+      "title": "Backup and disaster recovery is declared and tested",
+      "category": "reliability",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "sre.dr_tested is true",
+      "remediation": "Declare dr_tested with RPO/RTO and last recovery-test date in .sre/governance.yaml.",
+      "mappings": {
+        "NIST-800-53": [
+          "CP-9",
+          "CP-10"
+        ],
+        "SOC2": [
+          "A1.2"
+        ],
+        "HIPAA": [
+          "164.308(a)(7)"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-TOIL-007",
+      "title": "Toil is tracked and capped",
+      "category": "reliability",
+      "severity": "low",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "sre.toil_budget_pct=50 >= 1",
+      "remediation": "Declare a toil_budget_pct target (e.g., 50) in .sre/governance.yaml.",
+      "mappings": {
+        "NIST-800-53": [
+          "PL-2"
+        ]
+      }
+    },
+    {
+      "control_id": "SRE-ONCALL-008",
+      "title": "On-call rotation and escalation are defined",
+      "category": "reliability",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "sre.oncall_defined is true",
+      "remediation": "Declare oncall_defined and link the rotation/escalation policy.",
+      "mappings": {
+        "NIST-800-53": [
+          "IR-7"
+        ],
+        "SOC2": [
+          "CC7.3"
+        ]
+      }
+    },
+    {
+      "control_id": "GOV-BP-010",
+      "title": "Protected default branch with no direct pushes",
+      "category": "governance",
+      "severity": "critical",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "governance.branch_protection.enabled is true",
+      "remediation": "Enable branch protection on the default branch (no direct/force push).",
+      "mappings": {
+        "NIST-800-53": [
+          "CM-5",
+          "AC-6"
+        ],
+        "NIST-SSDF": [
+          "PS.1",
+          "PO.5"
+        ],
+        "SLSA": [
+          "Source L2"
+        ],
+        "SOC2": [
+          "CC8.1"
+        ]
+      }
+    },
+    {
+      "control_id": "GOV-REV-011",
+      "title": "Minimum required reviewers on pull requests",
+      "category": "governance",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "governance.branch_protection.required_reviewers=1 >= 1",
+      "remediation": "Require at least the profile-mandated number of approving reviewers.",
+      "mappings": {
+        "NIST-800-53": [
+          "AC-5",
+          "SA-11"
+        ],
+        "NIST-SSDF": [
+          "PW.7"
+        ],
+        "SOC2": [
+          "CC8.1"
+        ]
+      }
+    },
+    {
+      "control_id": "GOV-CODEOWNERS-012",
+      "title": "CODEOWNERS defines accountable owners",
+      "category": "governance",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found CODEOWNERS",
+      "remediation": "Add a CODEOWNERS file mapping paths to owning teams.",
+      "mappings": {
+        "NIST-800-53": [
+          "AC-5",
+          "PS-2"
+        ],
+        "SOC2": [
+          "CC1.3"
+        ]
+      }
+    },
+    {
+      "control_id": "GOV-SIGN-013",
+      "title": "Commits/tags are signed and verified",
+      "category": "governance",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "governance.require_signed_commits is true",
+      "remediation": "Require signed commits/tags and enforce verification in CI.",
+      "mappings": {
+        "NIST-800-53": [
+          "CM-5",
+          "SI-7"
+        ],
+        "NIST-SSDF": [
+          "PS.2"
+        ],
+        "SLSA": [
+          "Provenance L2"
+        ]
+      }
+    },
+    {
+      "control_id": "SEC-SECRETS-020",
+      "title": "Secret scanning + push protection is enabled",
+      "category": "security",
+      "severity": "critical",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "security.secret_scanning is true",
+      "remediation": "Enable secret scanning and push protection; rotate any exposed secrets.",
+      "mappings": {
+        "NIST-800-53": [
+          "IA-5",
+          "SA-15"
+        ],
+        "NIST-SSDF": [
+          "PW.4"
+        ],
+        "PCI-DSS": [
+          "3.5",
+          "6.3"
+        ]
+      }
+    },
+    {
+      "control_id": "SEC-SAST-021",
+      "title": "Static application security testing runs in CI",
+      "category": "security",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "workflow references one of ['codeql', 'sast', 'semgrep', 'code-scanning', 'snyk', 'bandit']",
+      "remediation": "Add a SAST/code-scanning workflow (e.g., CodeQL) gating merges.",
+      "mappings": {
+        "NIST-800-53": [
+          "RA-5",
+          "SA-11"
+        ],
+        "NIST-SSDF": [
+          "PW.8"
+        ],
+        "PCI-DSS": [
+          "6.3.2"
+        ]
+      }
+    },
+    {
+      "control_id": "SEC-SCA-022",
+      "title": "Dependency/SCA scanning is enabled",
+      "category": "security",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found .github/dependabot.yml",
+      "remediation": "Enable Dependabot/Renovate and fail CI on critical advisories.",
+      "mappings": {
+        "NIST-800-53": [
+          "RA-5",
+          "SA-12"
+        ],
+        "NIST-SSDF": [
+          "PW.4",
+          "RV.1"
+        ],
+        "SLSA": [
+          "Build L2"
+        ]
+      }
+    },
+    {
+      "control_id": "SEC-SBOM-023",
+      "title": "SBOM is generated for releases",
+      "category": "security",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "workflow references one of ['sbom', 'syft', 'cyclonedx', 'spdx']",
+      "remediation": "Add an SBOM generation step (Syft/CycloneDX) to the release workflow.",
+      "mappings": {
+        "NIST-800-53": [
+          "SA-8"
+        ],
+        "NIST-SSDF": [
+          "PS.3"
+        ],
+        "SLSA": [
+          "Provenance L2"
+        ],
+        "EO-14028": [
+          "Sec.4"
+        ]
+      }
+    },
+    {
+      "control_id": "SEC-IAC-024",
+      "title": "Infrastructure-as-Code is scanned",
+      "category": "security",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "workflow references one of ['tfsec', 'checkov', 'terrascan', 'kics', 'iac-scan']",
+      "remediation": "Add an IaC scanner (Checkov/tfsec) to CI for Terraform/K8s/CFN.",
+      "mappings": {
+        "NIST-800-53": [
+          "CM-6",
+          "CM-7"
+        ],
+        "NIST-SSDF": [
+          "PW.5"
+        ]
+      }
+    },
+    {
+      "control_id": "CMP-SECPOL-030",
+      "title": "SECURITY.md vulnerability disclosure policy exists",
+      "category": "compliance",
+      "severity": "medium",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found SECURITY.md",
+      "remediation": "Add a SECURITY.md with a disclosure contact and SLA.",
+      "mappings": {
+        "NIST-800-53": [
+          "RA-5"
+        ],
+        "NIST-SSDF": [
+          "RV.1"
+        ]
+      }
+    },
+    {
+      "control_id": "CMP-LICENSE-031",
+      "title": "License is declared",
+      "category": "compliance",
+      "severity": "low",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found LICENSE",
+      "remediation": "Add a LICENSE appropriate to the project and organization policy.",
+      "mappings": {
+        "SOC2": [
+          "CC1.1"
+        ]
+      }
+    },
+    {
+      "control_id": "CMP-README-032",
+      "title": "README documents purpose, ownership, and runbook links",
+      "category": "compliance",
+      "severity": "low",
+      "status": "PASS",
+      "applicability": "recommended",
+      "reason": "found README.md",
+      "remediation": "Add a README with ownership, architecture, and runbook links.",
+      "mappings": {
+        "SOC2": [
+          "CC2.2"
+        ]
+      }
+    },
+    {
+      "control_id": "CMP-AUDIT-033",
+      "title": "Agent actions are auditable and attributable",
+      "category": "compliance",
+      "severity": "high",
+      "status": "PASS",
+      "applicability": "mandatory",
+      "reason": "governance.audit_logging is true",
+      "remediation": "Enable audit logging for the SRE Governance Agent (audit.jsonl + provenance).",
+      "mappings": {
+        "NIST-800-53": [
+          "AU-2",
+          "AU-3",
+          "AU-12"
+        ],
+        "SOC2": [
+          "CC7.2"
+        ],
+        "HIPAA": [
+          "164.312(b)"
+        ]
+      }
+    }
+  ]
+}

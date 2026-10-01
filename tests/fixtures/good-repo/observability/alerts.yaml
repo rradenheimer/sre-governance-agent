@@ -1,0 +1,4 @@
+alerts:
+  - name: availability-burn-rate
+    sli: availability
+    query: sum(rate(failed_requests[5m])) / sum(rate(total_requests[5m]))

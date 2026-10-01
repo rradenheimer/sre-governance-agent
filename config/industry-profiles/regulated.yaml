@@ -1,0 +1,29 @@
+# Industry Profile: Regulated (Finance / Healthcare / Critical Infrastructure)
+# Maps to SOC 2, PCI-DSS, HIPAA, DORA (EU), ISO 27001.
+# Enforcement is BLOCKING on critical/high; AI may open PRs but a human must approve.
+profile: regulated
+display_name: Regulated (Finance / Healthcare / Critical Infra)
+description: >
+  For organizations under external audit and statutory obligations (SOX, PCI,
+  HIPAA, DORA). Emphasizes separation of duties, evidence retention, and
+  auditable change management. AI automation may propose pull requests but
+  cannot merge; all actions are logged for auditors.
+baseline: moderate
+enforcement: blocking
+ai_autonomy: propose_pr
+require_human_approval: true
+frameworks: [SOC2, PCI-DSS, HIPAA, DORA-EU, ISO-27001, NIST-SSDF]
+thresholds:
+  required_reviewers: 2
+  min_compliance_score: 90
+  max_critical_failures: 0
+  max_high_failures: 2
+default_status: mandatory
+controls:
+  SRE-TOIL-007: recommended
+  SEC-IAC-024: recommended
+  CMP-README-032: recommended
+data_handling:
+  allow_external_ai_calls: true     # with DPA/BAA in place
+  redact_secrets_in_prompts: true
+  retain_audit_days: 2555
