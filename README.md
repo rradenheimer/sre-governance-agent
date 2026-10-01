@@ -103,6 +103,22 @@ See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the rollout playbook (org-wide
 templates, phased enforcement, fleet reporting, and the staged GitHub Releases
 source-archive/SBOM pipeline). The CI/CD workflows are scanned with Checkov.
 
+## Continuous security and reliability signals
+
+`CodeQL SAST` analyzes Python on pull requests and pushes to `main`; the
+analysis step is required to succeed, and the IaC scan checks its workflow.
+`Scan Observability` evaluates the `scan-availability` alert in
+`observability/alerts.yaml` daily (or on demand) against the last 30 days of
+completed SRE Governance workflow runs from the GitHub Actions API. It emits
+success/total counts and the measured percentage in structured job logs,
+posts an Actions job summary, and fails the job when there is no data or the
+99.9% objective is missed. The repository's GitHub Actions runs and their IDs
+provide per-scan diagnostic logs and traceability; the monitor needs
+`actions: read` permission and runs on the default branch after merge. The
+`scan-latency` SLO remains a declaration, not a measured alert; do not infer
+latency compliance from the availability signal. See
+`.sre/slo.yaml` for the declared objectives.
+
 ## License
 
 See [LICENSE](LICENSE).

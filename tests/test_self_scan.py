@@ -16,9 +16,9 @@ def test_commercial_self_scan_does_not_overstate_missing_evidence():
 
     assert assessment.gate.compliant, assessment.gate.reasons
     results = {result.control_id: result for result in assessment.results}
-    assert {
-        result.control_id for result in assessment.results if result.status != PASS
-    } == {"SEC-SAST-021", "SRE-OBS-004"}
+    assert all(result.status == PASS for result in assessment.results), {
+        result.control_id: result.reason for result in assessment.results if result.status != PASS
+    }
     for control_id in (
         "GOV-BP-010", "GOV-REV-011", "GOV-SIGN-013", "SEC-SECRETS-020",
         "SRE-CHG-005", "SEC-SBOM-023", "SEC-IAC-024", "CMP-AUDIT-033",
