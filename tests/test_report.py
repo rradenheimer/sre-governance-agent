@@ -95,3 +95,14 @@ def test_audit_verification_requires_head_anchor(tmp_path):
     ok, msg = AuditLogger(log).verify()
     assert not ok
     assert "anchor is missing" in msg
+
+
+def test_audit_verification_rejects_invalid_head_anchor(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    logger = AuditLogger(log)
+    logger.record("scan", target="repo-a")
+    logger.anchor_path.write_text("[]", encoding="utf-8")
+
+    ok, msg = AuditLogger(log).verify()
+    assert not ok
+    assert "anchor is invalid" in msg

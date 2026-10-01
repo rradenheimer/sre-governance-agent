@@ -97,6 +97,8 @@ class AuditLogger:
             anchor = json.loads(self.anchor_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return False, "audit head anchor is invalid"
+        if not isinstance(anchor, dict):
+            return False, "audit head anchor is invalid"
         if anchor.get("record_count") != len(lines) or anchor.get("head_hash") != prev:
             return False, "audit log does not match its anchored head"
         return True, "audit chain intact"
