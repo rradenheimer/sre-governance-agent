@@ -87,3 +87,11 @@ def test_audit_logger_writes_verifiable_chain(tmp_path):
     from sre_governance.audit import AuditLogger
     ok, msg = AuditLogger(audit).verify()
     assert ok, msg
+
+
+def test_audit_logger_reports_persistence_failure(tmp_path):
+    (tmp_path / ".sre").mkdir()
+    (tmp_path / ".sre" / "audit.jsonl.head").mkdir()
+    result = _run(AUDIT_LOGGER, {"tool_name": "Edit", "tool_input": {}}, cwd=tmp_path)
+    assert result.returncode == 2
+    assert "failed to write audit record" in result.stderr

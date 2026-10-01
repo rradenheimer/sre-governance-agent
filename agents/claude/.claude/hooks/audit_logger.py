@@ -54,19 +54,18 @@ def main() -> int:
     tool_input = payload.get("tool_input", {}) or {}
     target = tool_input.get("file_path") or tool_input.get("command", "")[:120] or "-"
 
-    record = {
-        "ts": _now(),
-        "actor": "claude-agent",
-        "action": event if event == "session_stop" else f"tool:{tool_name}",
-        "target": str(target),
-        "outcome": "success",
-        "details": {"session_id": payload.get("session_id", "")},
-        "prev_hash": _last_hash(),
-        "hash": "",
-    }
-    record["hash"] = _compute_hash(record)
-
     try:
+        record = {
+            "ts": _now(),
+            "actor": "claude-agent",
+            "action": event if event == "session_stop" else f"tool:{tool_name}",
+            "target": str(target),
+            "outcome": "success",
+            "details": {"session_id": payload.get("session_id", "")},
+            "prev_hash": _last_hash(),
+            "hash": "",
+        }
+        record["hash"] = _compute_hash(record)
         AUDIT_PATH.parent.mkdir(parents=True, exist_ok=True)
         with AUDIT_PATH.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, sort_keys=True) + "\n")
@@ -75,8 +74,9 @@ def main() -> int:
             json.dumps({"record_count": len(lines), "head_hash": record["hash"]}, sort_keys=True) + "\n",
             encoding="utf-8",
         )
-    except Exception:
-        pass  # never break the agent on audit failure
+    except Exception as exc:
+        print(f"ERROR: failed to write audit record: {exc}", file=sys.stderr)
+        return 2
 
     return 0
 

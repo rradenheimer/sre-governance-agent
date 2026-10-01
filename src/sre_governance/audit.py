@@ -78,35 +78,51 @@ class AuditLogger:
         """Verify the hash chain. Returns (ok, message)."""
         if not self.path.exists():
             return False, "audit log is missing"
-        lines = [line.strip() for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
-        if not lines:
-            return False, "audit log is empty"
-        prev = GENESIS_HASH
-        for i, line in enumerate(lines, 1):
-            try:
-                rec = json.loads(line)
-                if not isinstance(rec, dict):
-                    return False, f"malformed audit record {i}"
-                stored = rec.get("hash", "")
-                event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
-                if rec.get("prev_hash") != prev:
-                    return False, f"broken chain at record {i}: prev_hash mismatch"
-                if event.compute_hash() != stored:
-                    return False, f"tampered record {i}: hash mismatch"
-                prev = stored
-            except (json.JSONDecodeError, TypeError, ValueError, AttributeError, KeyError):
-                return False, f"malformed audit record {i}"
-        if not self.anchor_path.exists():
-            return False, "audit head anchor is missing"
         try:
-            anchor = json.loads(self.anchor_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return False, "audit head anchor is invalid"
-        if not isinstance(anchor, dict):
-            return False, "audit head anchor is invalid"
-        if anchor.get("record_count") != len(lines) or anchor.get("head_hash") != prev:
-            return False, "audit log does not match its anchored head"
-        return True, "audit chain intact"
+            log_text = self.path.read_text(encoding="utf-8")
+        except OSError:
+            return False, "audit log is unreadable"
+        anchor_text = None
+        if self.anchor_path.exists():
+            try:
+                anchor_text = self.anchor_path.read_text(encoding="utf-8")
+            except OSError:
+                return False, "audit head anchor is invalid"
+        return verify_audit_contents(log_text, anchor_text)
+
+
+def verify_audit_contents(log_text: str | None, anchor_text: str | None) -> tuple[bool, str]:
+    if log_text is None:
+        return False, "audit log is missing"
+    lines = [line.strip() for line in log_text.splitlines() if line.strip()]
+    if not lines:
+        return False, "audit log is empty"
+    prev = GENESIS_HASH
+    for i, line in enumerate(lines, 1):
+        try:
+            rec = json.loads(line)
+            if not isinstance(rec, dict):
+                return False, f"malformed audit record {i}"
+            stored = rec.get("hash", "")
+            event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
+            if rec.get("prev_hash") != prev:
+                return False, f"broken chain at record {i}: prev_hash mismatch"
+            if event.compute_hash() != stored:
+                return False, f"tampered record {i}: hash mismatch"
+            prev = stored
+        except (json.JSONDecodeError, TypeError, ValueError, AttributeError, KeyError):
+            return False, f"malformed audit record {i}"
+    if anchor_text is None:
+        return False, "audit head anchor is missing"
+    try:
+        anchor = json.loads(anchor_text)
+    except (OSError, json.JSONDecodeError):
+        return False, "audit head anchor is invalid"
+    if not isinstance(anchor, dict):
+        return False, "audit head anchor is invalid"
+    if anchor.get("record_count") != len(lines) or anchor.get("head_hash") != prev:
+        return False, "audit log does not match its anchored head"
+    return True, "audit chain intact"
 
 
 def provenance(profile: str, catalog_version: str, score: float) -> dict[str, Any]:

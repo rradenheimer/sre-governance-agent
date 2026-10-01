@@ -94,9 +94,79 @@ def test_na_controls_excluded_from_score():
     assert assessment.score > baseline.score
 
 
-def test_quoted_false_metadata_does_not_pass_boolean_check():
+def test_audit_control_requires_verified_files_and_metadata():
     catalog, profiles = _ctx()
     scan = merge_api_metadata(scan_repo(GOOD), {"governance": {"audit_logging": "false"}})
     assessment = evaluate(scan, catalog, profiles["commercial"])
     audit = next(r for r in assessment.results if r.control_id == "CMP-AUDIT-033")
+    assert audit.status == FAIL
+
+
+def test_boolean_metadata_does_not_pass_numeric_checks():
+    catalog, profiles = _ctx()
+    scan = merge_api_metadata(
+        scan_repo(GOOD),
+        {"governance": {
+            "branch_protection": {"required_reviewers": True},
+        }, "sre": {"toil_budget_pct": True}},
+    )
+    assessment = evaluate(scan, catalog, profiles["commercial"])
+    statuses = {result.control_id: result.status for result in assessment.results}
+    assert statuses["GOV-REV-011"] == FAIL
+    assert statuses["SRE-TOIL-007"] == FAIL
+
+
+def test_slo_control_requires_a_valid_entry(tmp_path):
+    catalog, profiles = _ctx()
+    slo_file = tmp_path / ".sre" / "slo.yaml"
+    slo_file.parent.mkdir()
+
+    for text in ("", "service: api\nslos: []\n",
+                 "service: api\nslos:\n  - name: availability\n    sli: requests_ok\n"):
+        slo_file.write_text(text, encoding="utf-8")
+        assessment = evaluate(scan_repo(tmp_path), catalog, profiles["commercial"])
+        slo = next(result for result in assessment.results if result.control_id == "SRE-SLO-001")
+        assert slo.status == FAIL
+
+    slo_file.write_text(
+        "service: api\nslos:\n"
+        "  - name: availability\n    sli: requests_ok / requests_total\n"
+        "    objective: 99.9\n    window: 30d\n",
+        encoding="utf-8",
+    )
+    assessment = evaluate(scan_repo(tmp_path), catalog, profiles["commercial"])
+    slo = next(result for result in assessment.results if result.control_id == "SRE-SLO-001")
+    assert slo.status == PASS
+
+
+def test_audit_control_requires_tracked_verified_log_and_anchor(tmp_path):
+    import subprocess
+
+    from sre_governance.audit import AuditLogger
+
+    catalog, profiles = _ctx()
+    (tmp_path / ".sre").mkdir()
+    (tmp_path / ".sre" / "governance.yaml").write_text(
+        "governance:\n  audit_logging: true\n", encoding="utf-8",
+    )
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(
+        ["git", "-C", str(tmp_path), "add", ".sre/governance.yaml"], check=True,
+    )
+    assessment = evaluate(scan_repo(tmp_path), catalog, profiles["commercial"])
+    audit = next(result for result in assessment.results if result.control_id == "CMP-AUDIT-033")
+    assert audit.status == FAIL
+
+    audit_path = tmp_path / ".sre" / "audit.jsonl"
+    AuditLogger(audit_path).record("scan", target="fixture")
+    subprocess.run(["git", "-C", str(tmp_path), "add", ".sre"], check=True)
+
+    assessment = evaluate(scan_repo(tmp_path), catalog, profiles["commercial"])
+    audit = next(result for result in assessment.results if result.control_id == "CMP-AUDIT-033")
+    assert audit.status == PASS
+
+    (tmp_path / ".sre" / "audit.jsonl.head").unlink()
+    subprocess.run(["git", "-C", str(tmp_path), "rm", "-q", ".sre/audit.jsonl.head"], check=True)
+    assessment = evaluate(scan_repo(tmp_path), catalog, profiles["commercial"])
+    audit = next(result for result in assessment.results if result.control_id == "CMP-AUDIT-033")
     assert audit.status == FAIL

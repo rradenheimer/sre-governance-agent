@@ -11,7 +11,7 @@
 # `check.type` must be one of the evaluators registered in engine.CHECKS:
 #   file_exists | file_absent | workflow_present | content_match |
 #   metadata_true | metadata_gte | metadata_in | workflow_security_scan |
-#   observability_configured
+#   observability_configured | slo_configured | audit_log_verified
 # ---------------------------------------------------------------------------
 version: "1.0.0"
 schema_version: 1
@@ -28,7 +28,7 @@ controls:
       reliability targets are explicit, reviewable, and testable.
     rationale: SLOs are the foundation of SRE; error budgets cannot exist without them.
     check:
-      type: file_exists
+      type: slo_configured
       any_of: [".sre/slo.yaml", ".sre/slo.yml", "slo/", "sre/slo.yaml"]
     remediation: Add a .sre/slo.yaml declaring SLIs, SLO targets, and measurement windows.
     mappings:
@@ -341,8 +341,9 @@ controls:
     description: Automation (incl. AI agents) must emit an immutable audit trail.
     rationale: Transparency and accountability for autonomous changes.
     check:
-      type: metadata_true
-      key: governance.audit_logging
+      type: audit_log_verified
+      log_path: .sre/audit.jsonl
+      anchor_path: .sre/audit.jsonl.head
     remediation: Enable audit logging for the SRE Governance Agent (audit.jsonl + provenance).
     mappings:
       NIST-800-53: ["AU-2", "AU-3", "AU-12"]

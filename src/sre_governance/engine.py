@@ -9,6 +9,9 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+import yaml
+
+from sre_governance.audit import verify_audit_contents
 from sre_governance.catalog import Catalog, Control, Profile
 from sre_governance.scanner import (
     RepoScan,
@@ -130,11 +133,57 @@ def _check_metadata_gte(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, s
     threshold = params["value"]
     val = scan.metadata_value(key)
     try:
-        if val is not None and float(val) >= float(threshold):
+        if val is not None and not isinstance(val, bool) and float(val) >= float(threshold):
             return True, f"{key}={val} >= {threshold}"
     except (TypeError, ValueError):
         pass
     return False, f"{key}={val!r} < {threshold}"
+
+
+def _check_slo_configured(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    candidates = params.get("any_of", [])
+    paths = [
+        path for path in sorted(scan.files)
+        if path in candidates or any(
+            candidate.endswith("/") and path.startswith(candidate)
+            for candidate in candidates
+        )
+    ]
+    for path in paths:
+        try:
+            document = yaml.safe_load(scan.read_text(path))
+        except yaml.YAMLError:
+            continue
+        if not isinstance(document, dict) or not isinstance(document.get("service"), str):
+            continue
+        if not document["service"].strip() or not isinstance(document.get("slos"), list):
+            continue
+        for slo in document["slos"]:
+            if not isinstance(slo, dict):
+                continue
+            if not all(isinstance(slo.get(key), str) and slo[key].strip()
+                       for key in ("name", "sli", "window")):
+                continue
+            objective = slo.get("objective")
+            if (isinstance(objective, (int, float)) and not isinstance(objective, bool)
+                    and 0 < objective <= 100):
+                return True, f"{path} declares a valid SLO for {document['service']}"
+    return False, "no valid SLO entry with a service, SLI, objective, and window"
+
+
+def _check_audit_log_verified(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    if scan.metadata_value("governance.audit_logging") is not True:
+        return False, "governance.audit_logging is not true"
+    log_path = params["log_path"]
+    anchor_path = params["anchor_path"]
+    if log_path not in scan.files or anchor_path not in scan.files:
+        return False, "audit log and head anchor must both be tracked"
+    valid, message = verify_audit_contents(
+        scan.read_text(log_path), scan.read_text(anchor_path),
+    )
+    if valid:
+        return True, "tracked audit log and head anchor verify"
+    return False, message
 
 
 def _check_metadata_in(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
@@ -156,6 +205,8 @@ CHECKS: dict[str, CheckFn] = {
     "metadata_true": _check_metadata_true,
     "metadata_gte": _check_metadata_gte,
     "metadata_in": _check_metadata_in,
+    "slo_configured": _check_slo_configured,
+    "audit_log_verified": _check_audit_log_verified,
 }
 
 
