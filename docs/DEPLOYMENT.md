@@ -100,7 +100,8 @@ settings in GitHub before declaring them true, and periodically recheck for drif
 
 All changes are PRs in version control and fully revertible. Disabling the agent
 is removing a workflow — the deterministic engine has no side effects beyond
-reports and the append-only audit log.
+reports and the append-only audit log. Fleet rollouts roll back automatically;
+see [Staged fleet rollout](#staged-fleet-rollout).
 
 ## Staged GitHub Releases
 
@@ -134,10 +135,100 @@ tags.
 The GitHub Actions workflows in `.github/workflows/` are this repository's
 CI/CD configuration as code. **IaC Scan** runs Checkov against them on PRs and
 pushes to `main`, failing on detected misconfigurations. The protected `main`
-branch requires all five matrix scan jobs and the governance scan to pass. The
+branch requires all six matrix scan jobs (including `iac-scan (deploy.yml)`)
+and the governance scan to pass. The
 `iac-scan.yml` matrix context also scans `codeql.yml` and
-`scan-observability.yml`, keeping all seven workflows covered without adding
+`scan-observability.yml`, keeping all eight workflows covered without adding
 unprotected status-check contexts.
 **Policy Validation** also builds the source archive and validates a real
 SPDX SBOM in CI before a release can be proposed. This is not a claim
 that Terraform or Kubernetes infrastructure exists in this repository.
+
+## Staged fleet rollout
+
+**Staged Governance Rollout** (`.github/workflows/deploy.yml`) deploys a
+promoted release to governed repositories. The deployed unit is the
+`sre-governance.yml` workflow from the release tag
+(`agents/copilot/.github/workflows/sre-governance.yml`), with its engine
+checkout pinned to that tag. It also adds `.sre/profile` (the
+`default_profile`) to repos that don't have one. It never writes
+`.sre/governance.yaml` attestations; teams must make those themselves.
+
+### Rings and health threshold
+
+`config/rollout-rings.yaml` lists ordered rings (`canary`, `early`, `broad`)
+of `owner/repo` targets. A repository may appear in only one ring. The `health`
+section sets:
+
+- `min_scan_success_rate` — the minimum percentage of ring repositories whose
+  latest `SRE Governance` run on the deployed commit completed successfully;
+- `soak_minutes` — how long verification observes the ring for scans to
+  complete. Scans still pending at the end, repositories that were not
+  deployed, and API failures that persist through the window count as failures;
+- `poll_seconds` — the GitHub API polling interval.
+
+Change ring membership or thresholds through a reviewed PR, like any other
+policy change.
+
+### Procedure
+
+1. Release and promote `v<VERSION>` (see above). The rollout deploys only the
+   version in `VERSION` on `main`.
+2. Dispatch **Staged Governance Rollout** from `main`. The job waits for a
+   required reviewer to approve the `production-rollout` environment.
+3. The job runs `validate-config` and the test suite. It then verifies that the
+   release is not a prerelease, is immutable, and has a verified-signed tag
+   that is an ancestor of `main`.
+4. `scripts/deploy.sh --strategy canary --ring canary --version v<VERSION>`
+   opens or updates a `sre-governance/rollout-v<VERSION>` PR in each canary
+   repository. Default branches are never pushed to directly. Before changing
+   a repository, it records that repository's previous pinned version and
+   workflow blob in `rollout-state/rollout-state.jsonl`, which is uploaded as
+   the `rollout-state` artifact. Repositories already on the target version
+   are left unchanged.
+5. `scripts/verify_rollout.py --ring canary` reads each repository's
+   `SRE Governance` runs for the deployed commit from the GitHub Actions API.
+   It fails when the threshold is breached.
+6. `scripts/promote.sh --ring early` re-verifies the preceding ring and
+   deploys `early` only if that ring is healthy. The job then verifies `early`
+   and repeats both steps for `broad`.
+7. Rollout PRs are merged by each repository's owners under their own branch
+   protection.
+
+### Automated rollback
+
+If any step fails, `scripts/rollback.sh` runs (`if: failure()`) against the
+last ring in the rollout state. For each repository that ring touched:
+
+- **Open rollout PR:** the PR is closed and its branch deleted. The default
+  branch still runs the recorded previous version.
+- **Already-merged PR:** a `sre-governance/rollback-v<VERSION>` PR restores the
+  recorded previous workflow blob. If the rollout added the workflow or
+  `.sre/profile`, the rollback PR removes them instead.
+- **No PR:** a partially written rollout branch is deleted.
+
+Repositories that were already on the target version are never modified.
+Rollback continues past per-repository errors, then fails the job and names
+each repository that must be restored manually. To roll back a ring by hand,
+download the `rollout-state` artifact and run
+`GH_TOKEN=... ./scripts/rollback.sh --state rollout-state.jsonl --ring <ring>`.
+Add `--dry-run` to preview the changes first.
+
+### Environment and credentials (one-time setup)
+
+1. Create the `production-rollout` environment (**Settings → Environments**).
+   Add a **Required reviewers** protection rule with at least one reviewer, and
+   enable **Prevent self-review**. Restrict deployment branches to `main`.
+2. Add the `FLEET_ROLLOUT_TOKEN` environment secret. Use a GitHub App
+   installation token or a fine-grained token scoped to the ring repositories,
+   with **Contents**, **Pull requests**, and **Workflows** write permissions and
+   **Actions** read permission. The workflow passes it to `gh` only through
+   `GH_TOKEN` and never prints it. Even dry runs need this secret for their
+   read-only API calls.
+3. Runs are read-only dry runs by default. They report each ring's planned
+   `previous -> target` versions, make no changes, and skip health
+   verification. Set the environment variable `FLEET_ROLLOUT_LIVE=true` to
+   allow changes, and remove it when the rollout ends. This is an environment
+   setting instead of a `workflow_dispatch` input because Checkov
+   (`CKV_GHA_7`) forbids dispatch inputs that affect build output.
+4. Add `iac-scan (deploy.yml)` to the required status checks on `main`.

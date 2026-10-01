@@ -21,6 +21,7 @@ jobs:
           - iac-scan.yml
           - release.yml
           - promote-release.yml
+          - deploy.yml
     steps:
       - uses: actions/checkout@v4
       - name: Scan GitHub Actions CI/CD configuration

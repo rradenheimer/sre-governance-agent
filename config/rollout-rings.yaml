@@ -1,0 +1,38 @@
+# Staged rollout of the SRE Governance workflow to governed repositories.
+#
+# `.github/workflows/deploy.yml` deploys a released, signed `v<VERSION>` of the
+# pinned `sre-governance.yml` workflow (plus `.sre/profile` scaffolding when
+# missing) ring by ring, in the order listed. Each ring must meet the health
+# threshold before the next ring is promoted; a breach triggers automated
+# rollback of every repository touched in the failed ring.
+#
+# Changes to this file are reviewed like code (CODEOWNERS + required reviews).
+version: 1
+
+# Profile written to `.sre/profile` only when a target repository has none.
+default_profile: commercial
+
+health:
+  # Minimum percentage of ring repositories whose `SRE Governance` run on the
+  # deployed commit completed successfully.
+  min_scan_success_rate: 95
+  # Soak period: how long verification observes a ring for its scans to
+  # complete before deciding. Scans still pending at the end count as failed.
+  soak_minutes: 30
+  # Interval between GitHub API polls during the soak period.
+  poll_seconds: 60
+
+rings:
+  - name: canary
+    repos:
+      - rradenheimer/sre-practice-repo
+  - name: early
+    repos:
+      - rradenheimer/skills-getting-started-with-github-copilot
+      - rradenheimer/skills-build-applications-w-copilot-agent-mode
+  - name: broad
+    repos:
+      - rradenheimer/workspaces
+      - rradenheimer/skills-agent-orchestration-build-your-ai-dream-team
+      - rradenheimer/markdown-portfolio
+      - rradenheimer/github-slideshow

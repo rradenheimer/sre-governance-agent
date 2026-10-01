@@ -1,0 +1,103 @@
+name: Staged Governance Rollout
+
+# Deploys the signed, promoted SRE Governance release named in VERSION to the
+# governed repositories in config/rollout-rings.yaml, one ring at a time
+# (canary -> early -> broad). Each ring must meet the health threshold before
+# the next is promoted; any failure rolls back the failed ring automatically.
+#
+# The `production-rollout` environment must have a required-reviewer protection
+# rule, the FLEET_ROLLOUT_TOKEN secret, and (to make changes) the
+# FLEET_ROLLOUT_LIVE=true variable. Without that variable every run is a
+# read-only dry run. See docs/DEPLOYMENT.md.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: staged-governance-rollout
+  cancel-in-progress: false
+
+jobs:
+  staged-rollout:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    environment: production-rollout
+    permissions:
+      contents: read
+    env:
+      ROLLOUT_STATE: rollout-state/rollout-state.jsonl
+      ROLLOUT_DRY_RUN: ${{ vars.FLEET_ROLLOUT_LIVE != 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies and run tests
+        run: |
+          python -m pip install -r requirements.txt
+          PYTHONPATH=src python -m sre_governance.cli validate-config
+          pytest -q
+      - name: Verify release is promoted, immutable, and signed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v$(cat VERSION)"
+          RELEASE_API="repos/$GITHUB_REPOSITORY/releases/tags/$VERSION"
+          gh release view "$VERSION" --json isPrerelease --jq '.isPrerelease' | grep -qx false
+          gh api "$RELEASE_API" --jq '.immutable' | grep -qx true
+          RELEASE_COMMIT="$(gh api "$RELEASE_API" --jq '.target_commitish')"
+          TAG_OBJECT="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$VERSION" --jq '.object.sha')"
+          gh api "repos/$GITHUB_REPOSITORY/git/tags/$TAG_OBJECT" --jq '.verification.verified' |
+            grep -qx true
+          git fetch origin tag "$VERSION"
+          test "$(git rev-parse "$VERSION^{tag}")" = "$TAG_OBJECT"
+          test "$(git rev-parse "$VERSION^{commit}")" = "$RELEASE_COMMIT"
+          git merge-base --is-ancestor "$VERSION" HEAD
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "Rolling out $VERSION (dry run: $ROLLOUT_DRY_RUN)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Require fleet rollout credentials
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::FLEET_ROLLOUT_TOKEN is not configured for the production-rollout environment."
+            exit 1
+          fi
+      - name: Deploy canary ring
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: ./scripts/deploy.sh --strategy canary --ring canary --version "$VERSION"
+      - name: Verify canary ring health
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: python scripts/verify_rollout.py --ring canary
+      - name: Promote to early ring
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: |
+          ./scripts/promote.sh --ring early --version "$VERSION"
+          python scripts/verify_rollout.py --ring early
+      - name: Promote to broad ring
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: |
+          ./scripts/promote.sh --ring broad --version "$VERSION"
+          python scripts/verify_rollout.py --ring broad
+      - name: Automated rollback of the failed ring
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.FLEET_ROLLOUT_TOKEN }}
+        run: ./scripts/rollback.sh
+      - name: Upload rollout state
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollout-state
+          path: rollout-state/
+          if-no-files-found: ignore

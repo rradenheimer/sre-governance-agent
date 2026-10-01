@@ -51,10 +51,16 @@ security/supply-chain (secret scanning, SAST, SCA, SBOM, IaC), and compliance
 hygiene (SECURITY.md, license, README, **AI audit trail**). Each control maps to
 frameworks — see [docs/FRAMEWORK-CROSSWALK.md](docs/FRAMEWORK-CROSSWALK.md).
 
-The catalog contains 21 controls; this does not mean every scan passes all 21.
-The repository's release workflows gate and promote artifacts but do not deploy
-workloads with staged rollout and rollback, so `SRE-CHG-005` correctly remains
-failing until such a deployment workflow is added.
+The catalog contains 21 controls; a PASS on this repository does not imply any
+other repository passes. `SRE-CHG-005` is satisfied by **Staged Governance
+Rollout** (`.github/workflows/deploy.yml`), which deploys a signed, promoted
+release of the pinned `sre-governance.yml` workflow to governed repositories in
+rings (`canary` → `early` → `broad`, `config/rollout-rings.yaml`). The workflow
+runs tests, verifies the release tag, deploys each ring through pull requests,
+gates every promotion on the ring's SRE Governance scan success rate, and
+automatically rolls back the failed ring. It requires approval on the
+`production-rollout` environment and is a read-only dry run unless that
+environment sets `FLEET_ROLLOUT_LIVE=true`.
 
 **Evidence boundary:** Checks of remote hosting settings use declarations in
 `.sre/governance.yaml`, not live GitHub API evidence. A PASS for branch protection,
@@ -102,6 +108,8 @@ python scripts/fleet_aggregate.py scan --repos-root /path/to/org --out fleet-rep
 | `config/control-catalog.yaml` | Source-of-truth controls + framework mappings |
 | `config/industry-profiles/` | Federal/Defense, Regulated, Commercial overlays |
 | `src/sre_governance/` | Deterministic engine + CLI (no AI, no network) |
+| `config/rollout-rings.yaml` | Rollout rings (target repos) and health threshold |
+| `scripts/` | Staged rollout: `deploy.sh`, `verify_rollout.py`, `promote.sh`, `rollback.sh` |
 | `policies/` | Human-readable policies + OPA/Rego policy-as-code |
 | `scripts/` | Local OPA gate runner + fleet-aggregation tooling |
 | `agents/copilot/` | **GitHub Copilot** edition (instructions, chat mode, prompts, workflows) |
@@ -114,7 +122,8 @@ python scripts/fleet_aggregate.py scan --repos-root /path/to/org --out fleet-rep
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the rollout playbook (org-wide
 templates, phased enforcement, fleet reporting, and the staged GitHub Releases
-source-archive/SBOM pipeline). The CI/CD workflows are scanned with Checkov.
+source-archive/SBOM pipeline, and the ring-based staged rollout with automated
+rollback). The CI/CD workflows are scanned with Checkov.
 
 ## Continuous security and reliability signals
 

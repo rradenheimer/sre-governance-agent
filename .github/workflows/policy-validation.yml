@@ -11,6 +11,7 @@ on:
       - "src/**"
       - "tests/**"
       - "policies/**"
+      - "scripts/**"
   push:
     branches: [main, master]
   workflow_dispatch:

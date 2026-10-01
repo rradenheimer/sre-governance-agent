@@ -11,3 +11,6 @@ venv/
 
 # Temp
 tmp-*/
+
+# Rollout state (uploaded as a workflow artifact)
+rollout-state/
