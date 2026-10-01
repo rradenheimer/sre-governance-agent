@@ -1,0 +1,16 @@
+# Declared governance posture for the SRE Governance Agent repository itself.
+# These are declarations, not evidence of remote GitHub settings. Update only
+# after verifying the corresponding settings and practices.
+governance:
+  branch_protection:
+    enabled: false
+    required_reviewers: 0
+  require_signed_commits: false
+  audit_logging: true
+security:
+  secret_scanning: false
+sre:
+  error_budget_policy_defined: true
+  dr_tested: true
+  toil_budget_pct: 50
+  oncall_defined: true

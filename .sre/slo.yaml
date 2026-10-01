@@ -1,0 +1,14 @@
+service: sre-governance-agent
+owner: platform-sre
+slos:
+  - name: scan-availability
+    sli: successful_scans / total_scans
+    objective: 99.9
+    window: 30d
+  - name: scan-latency
+    sli: scans_under_5s / total_scans
+    objective: 99.0
+    window: 30d
+error_budget:
+  policy: "Freeze catalog feature changes when the 30d budget is exhausted."
+  owner: platform-sre
