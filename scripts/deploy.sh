@@ -126,6 +126,13 @@ BRANCH="sre-governance/rollout-$VERSION"
 RUN_URL="${GITHUB_SERVER_URL:-https://github.com}/${GITHUB_REPOSITORY:-$ENGINE_REPO}/actions/runs/${GITHUB_RUN_ID:-local}"
 printf '%s\n' "$DEFAULT_PROFILE" > "$WORK/profile"
 
+# Mark the ring as in progress before any API call so rollback targets this ring
+# even if the first repository fails before it is recorded.
+mkdir -p "$(dirname "$STATE")"
+jq -nc --arg ring "$RING" --arg version "$VERSION" --argjson dry_run "$DRY_RUN" \
+  --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  '{ts: $ts, phase: "ring_started", ring: $ring, version: $version, dry_run: $dry_run}' >> "$STATE"
+
 for REPO in "${REPOS[@]}"; do
   DEFAULT_BRANCH="$(gh api "repos/$REPO" --jq .default_branch)"
   BASE_SHA="$(gh api "repos/$REPO/git/ref/heads/$DEFAULT_BRANCH" --jq .object.sha)"

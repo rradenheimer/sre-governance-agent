@@ -499,3 +499,30 @@ def test_main_dry_run_skips_api(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("ROLLOUT_DRY_RUN", "true")
     assert verify_rollout.main(["--ring", "canary"]) == 0
     assert "DRY RUN" in capsys.readouterr().out
+
+
+@requires_tools
+def test_rollback_targets_failed_ring_even_if_it_touched_nothing(tmp_path):
+    """A ring that fails before recording a repo must not roll back the healthy prior ring."""
+    config = _write_config(tmp_path, ["acme/canary"], early=["acme/early"])
+    state = tmp_path / "state.jsonl"
+    _rollback_state(state)  # includes a healthy, touched canary ring entry
+    state.write_text("\n".join(
+        line for line in state.read_text(encoding="utf-8").splitlines()
+        if json.loads(line)["ring"] == "canary"
+    ) + "\n", encoding="utf-8")
+    env, log = _stub_env(tmp_path, [(r"^api repos/acme/early ", ("", 1, "HTTP 502\n"))])
+    deploy = subprocess.run(
+        [str(ROOT / "scripts" / "deploy.sh"), "--strategy", "canary", "--ring", "early",
+         "--version", "v1.1.0", "--config", str(config), "--state", str(state),
+         "--template", str(TEMPLATE)],
+        env=env, capture_output=True, text=True, check=False,
+    )
+    assert deploy.returncode != 0
+    assert _state(state)[-1]["phase"] == "ring_started"
+    log.write_text("", encoding="utf-8")
+    result = subprocess.run([str(ROOT / "scripts" / "rollback.sh"), "--state", str(state)],
+                            env=env, capture_output=True, text=True, check=False)
+    assert result.returncode == 0, result.stderr
+    assert "Rollback of ring 'early' complete." in result.stdout
+    assert "acme/canary" not in log.read_text(encoding="utf-8")

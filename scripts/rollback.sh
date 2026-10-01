@@ -4,7 +4,7 @@
 #   ./scripts/rollback.sh [--ring <ring>] [--state FILE] [--dry-run]
 #
 # Reads the rollout state written by scripts/deploy.sh. Without --ring it rolls
-# back the last ring that was deployed. For each repository the ring touched:
+# back the most recently started ring. For each repository the ring touched:
 #   * open rollout PR    -> closed and its branch deleted; the default branch
 #                           still runs the recorded previous version;
 #   * merged rollout PR  -> a rollback PR restores the recorded previous
@@ -38,9 +38,10 @@ if [ ! -s "$STATE" ]; then
 fi
 jq -s . "$STATE" > /dev/null || { echo "::error::rollout state $STATE is malformed" >&2; exit 1; }
 if [ -z "$RING" ]; then
-  RING="$(jq -rs 'map(select(.phase == "touched")) | last | .ring // empty' "$STATE")"
+  # The most recently started ring is the one that failed.
+  RING="$(jq -rs 'map(select(.ring)) | last | .ring // empty' "$STATE")"
   if [ -z "$RING" ]; then
-    echo "No repositories were changed; nothing to roll back."
+    echo "No ring was deployed; nothing to roll back."
     exit 0
   fi
 fi
