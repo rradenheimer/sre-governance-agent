@@ -2,25 +2,13 @@ name: Staged GitHub Release
 
 on:
   workflow_dispatch:
-    inputs:
-      version:
-        description: Version in VERSION (without v prefix)
-        required: true
-        type: string
-      stage:
-        description: Create a tested candidate or promote an existing candidate
-        required: true
-        type: choice
-        options:
-          - candidate
-          - promote
 
 permissions:
   contents: read
 
 jobs:
   candidate:
-    if: github.ref == 'refs/heads/main' && inputs.stage == 'candidate'
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -30,28 +18,27 @@ jobs:
         with:
           python-version: "3.12"
       - name: Validate version and run tests
-        env:
-          VERSION: ${{ inputs.version }}
         run: |
-          test "$VERSION" = "$(cat VERSION)"
+          VERSION="$(cat VERSION)"
+          test -n "$VERSION"
           python -m pip install -r requirements.txt
           PYTHONPATH=src python -m sre_governance.cli validate-config
           python -m pytest -q
           PYTHONPATH=src python -m sre_governance.cli scan --repo . --profile commercial
           mkdir dist
-          git archive --format=tar.gz --output="dist/sre-governance-agent-$VERSION.tar.gz" \
+          git archive --format=tar.gz --output="dist/sre-governance-agent.tar.gz" \
             HEAD src config agents docs policies requirements.txt README.md LICENSE VERSION
       - name: Generate SPDX SBOM for release artifacts
         uses: anchore/sbom-action@v0
         with:
-          file: dist/sre-governance-agent-${{ inputs.version }}.tar.gz
+          file: dist/sre-governance-agent.tar.gz
           format: spdx-json
           output-file: dist/sre-governance-agent.spdx.json
       - name: Create immutable candidate release
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
         run: |
+          VERSION="$(cat VERSION)"
           if gh release view "v$VERSION" >/dev/null 2>&1; then
             echo "::error::Release v$VERSION already exists"
             exit 1
@@ -59,26 +46,3 @@ jobs:
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" --title "SRE Governance Agent v$VERSION" \
             --generate-notes --prerelease
-
-  promote:
-    if: github.ref == 'refs/heads/main' && inputs.stage == 'promote'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Check candidate and promote without rebuilding
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-        run: |
-          test "$VERSION" = "$(cat VERSION)"
-          TAG="v$VERSION"
-          gh release view "$TAG" --json isPrerelease,assets --jq \
-            '[.isPrerelease, ([.assets[].name] | index("sre-governance-agent-'\"$VERSION\"'.tar.gz") != null), ([.assets[].name] | index("sre-governance-agent.spdx.json") != null)] | all' |
-            grep -qx true
-          git fetch origin tag "$TAG"
-          git merge-base --is-ancestor "$TAG" HEAD
-          gh release edit "$TAG" --prerelease=false

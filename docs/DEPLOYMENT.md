@@ -75,13 +75,13 @@ reports and the append-only audit log.
 
 The agent is distributed as a source archive, not published to PyPI. After
 review and merge to `main`, dispatch **Staged GitHub Release** from `main`
-with `stage: candidate` and the exact value in `VERSION`. The workflow
+to build a candidate for the version in `VERSION`. The workflow
 validates the catalog, runs tests and a commercial scan, builds a source
 archive, generates an SPDX SBOM from that archive, and publishes both as
 assets of a prerelease. It refuses to overwrite an existing release.
 
-Inspect and test the candidate assets before manually dispatching the workflow
-again with `stage: promote` and the same version. Promotion requires the
+Inspect and test the candidate assets before manually dispatching **Promote
+GitHub Release** from `main`. Promotion requires the
 candidate to be a prerelease, requires both archive and SBOM assets, and
 checks that the tag is an ancestor of the current `main` before publishing
 the already-built artifacts. Promotion does not rebuild. If a release must be

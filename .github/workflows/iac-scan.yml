@@ -12,11 +12,20 @@ permissions:
 jobs:
   iac-scan:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        workflow:
+          - sre-governance.yml
+          - policy-validation.yml
+          - iac-scan.yml
+          - release.yml
+          - promote-release.yml
     steps:
       - uses: actions/checkout@v4
       - name: Scan GitHub Actions CI/CD configuration
         uses: bridgecrewio/checkov-action@v12
         with:
-          directory: .
+          file: .github/workflows/${{ matrix.workflow }}
           framework: github_actions
           soft_fail: false
