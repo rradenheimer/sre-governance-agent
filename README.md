@@ -63,7 +63,7 @@ SLSA Source L2, SOC 2 CC8.1), `GOV-REV-011`, and `SEC-SECRETS-020`
 verifying the corresponding GitHub settings on 2026-10-01. To recheck,
 use an account with repository administration access to inspect the default
 branch protection (PR reviews, status checks, no force pushes or deletions,
-admin enforcement) and the repository's **Security and analysis** settings
+admin enforcement, signed-commit requirement) and the repository's **Security and analysis** settings
 (secret scanning and push protection). A local scan alone cannot detect
 subsequent remote-setting drift.
 
@@ -100,7 +100,8 @@ python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
 ## Deploy to 2,000 repos
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the rollout playbook (org-wide
-templates, phased enforcement, and fleet reporting).
+templates, phased enforcement, fleet reporting, and the staged GitHub Releases
+source-archive/SBOM pipeline). The CI/CD workflows are scanned with Checkov.
 
 ## License
 
