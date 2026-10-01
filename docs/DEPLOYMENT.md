@@ -74,8 +74,17 @@ reports and the append-only audit log.
 ## Staged GitHub Releases
 
 The agent is distributed as a source archive, not published to PyPI. After
-review and merge to `main`, dispatch **Staged GitHub Release** from `main`
-to build a candidate for the version in `VERSION`. The workflow
+review and merge to `main`, sign an annotated `v<VERSION>` tag on the
+current `main` commit with a GitHub-registered signing key and push it:
+
+```bash
+git tag -s v1.0.0 -m "SRE Governance Agent v1.0.0"
+git push origin v1.0.0
+```
+
+Use the current value of `VERSION`, not necessarily `1.0.0`. Dispatch
+**Staged GitHub Release** from `main` to build a candidate for that version.
+The workflow rejects unsigned tags and tags pointing to another commit. It
 validates the catalog, runs tests and a commercial scan, builds a source
 archive, generates an SPDX SBOM from that archive, and publishes both as
 assets of a prerelease. It refuses to overwrite an existing release.

@@ -40,6 +40,8 @@ def test_release_and_iac_workflows_have_real_gates():
     )
     promote = promotion["jobs"]["promote"]["steps"]
     assert any("python -m pytest -q" in step.get("run", "") for step in candidate)
+    assert any(".verification.verified" in step.get("run", "")
+               and "git rev-parse" in step["run"] for step in candidate)
     assert any("git archive" in step.get("run", "") for step in candidate)
     assert any(step.get("uses", "").startswith("anchore/sbom-action@")
                and step.get("with", {}).get("output-file")
