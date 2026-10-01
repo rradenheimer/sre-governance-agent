@@ -1,0 +1,30 @@
+name: Promote GitHub Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check candidate and promote without rebuilding
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat VERSION)"
+          TAG="v$VERSION"
+          gh release view "$TAG" --json isPrerelease,assets --jq \
+            '[.isPrerelease, ([.assets[].name] | index("sre-governance-agent.tar.gz") != null), ([.assets[].name] | index("sre-governance-agent.spdx.json") != null)] | all' |
+            grep -qx true
+          git fetch origin tag "$TAG"
+          git merge-base --is-ancestor "$TAG" HEAD
+          gh release edit "$TAG" --prerelease=false

@@ -11,11 +11,6 @@ on:
   schedule:
     - cron: "0 7 * * 1"   # weekly Monday 07:00 UTC continuous-monitoring sweep
   workflow_dispatch:
-    inputs:
-      profile:
-        description: Industry profile override
-        required: false
-        default: ""
 
 permissions:
   contents: read
@@ -39,8 +34,8 @@ jobs:
         id: profile
         shell: bash
         run: |
-          PROFILE="${{ github.event.inputs.profile }}"
-          if [ -z "$PROFILE" ] && [ -f .sre/profile ]; then PROFILE=$(cat .sre/profile | tr -d '[:space:]'); fi
+          PROFILE=""
+          if [ -f .sre/profile ]; then PROFILE=$(cat .sre/profile | tr -d '[:space:]'); fi
           if [ -z "$PROFILE" ]; then PROFILE="commercial"; fi
           echo "profile=$PROFILE" >> "$GITHUB_OUTPUT"
           echo "Resolved industry profile: $PROFILE"

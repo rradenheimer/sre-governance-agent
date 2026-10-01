@@ -34,7 +34,11 @@ def test_release_and_iac_workflows_have_real_gates():
         Loader=yaml.BaseLoader,
     )
     candidate = release["jobs"]["candidate"]["steps"]
-    promote = release["jobs"]["promote"]["steps"]
+    promotion = yaml.load(
+        (workflows / "promote-release.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    promote = promotion["jobs"]["promote"]["steps"]
     assert any("python -m pytest -q" in step.get("run", "") for step in candidate)
     assert any("git archive" in step.get("run", "") for step in candidate)
     assert any(step.get("uses", "").startswith("anchore/sbom-action@")
@@ -49,6 +53,9 @@ def test_release_and_iac_workflows_have_real_gates():
         (workflows / "iac-scan.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,
     )
+    assert set(iac["jobs"]["iac-scan"]["strategy"]["matrix"]["workflow"]) == {
+        path.name for path in workflows.glob("*.yml")
+    }
     steps = iac["jobs"]["iac-scan"]["steps"]
     assert any(step.get("uses", "").startswith("bridgecrewio/checkov-action@")
                and step.get("with", {}).get("framework") == "github_actions"
