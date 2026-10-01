@@ -103,6 +103,7 @@ def test_release_and_iac_workflows_have_real_gates():
         restore = next(step for step in governance["jobs"]["governance-scan"]["steps"]
                        if step.get("name") == "Restore prior audit chain")
         assert "sre-governance-reports" in restore["run"]
+        assert "No prior audit artifact found" in restore["run"]
         assert any(step.get("name") == "Persist audit chain for the next run"
                    for step in governance["jobs"]["governance-scan"]["steps"])
 

@@ -56,10 +56,13 @@ jobs:
               tar -xzf "$RUNNER_TEMP/sre-governance-audit/audit-chain.tar.gz" -C .
             else
               mkdir -p "$RUNNER_TEMP/sre-governance-reports"
-              gh run download "$PRIOR_RUN" --name sre-governance-reports \
-                --dir "$RUNNER_TEMP/sre-governance-reports"
-              cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl" .sre/audit.jsonl
-              cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl.head" .sre/audit.jsonl.head
+              if gh run download "$PRIOR_RUN" --name sre-governance-reports \
+                --dir "$RUNNER_TEMP/sre-governance-reports"; then
+                cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl" .sre/audit.jsonl
+                cp "$RUNNER_TEMP/sre-governance-reports/.sre/audit.jsonl.head" .sre/audit.jsonl.head
+              else
+                echo "::notice::No prior audit artifact found; starting with the checked-in audit chain."
+              fi
             fi
           fi
 
