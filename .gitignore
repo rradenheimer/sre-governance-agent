@@ -2,6 +2,12 @@
 sre-reports/
 *.sarif
 
+# Secrets / local env files
+.env
+.env.*
+.envrc
+.streamlit/secrets.toml
+
 # Python
 __pycache__/
 *.pyc
