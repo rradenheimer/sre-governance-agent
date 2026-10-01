@@ -86,6 +86,13 @@ python -m sre_governance.cli scan --repo . --profile commercial
 
 # Verify the audit chain is intact
 python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
+
+# Enforce the policy-as-code gate locally (OPA/conftest, or Python fallback)
+python -m sre_governance.cli scan --repo . --profile commercial --format json
+python scripts/opa_gate.py --report sre-reports/sre-governance-report.json
+
+# Roll results up across many repos (org-wide dashboard)
+python scripts/fleet_aggregate.py scan --repos-root /path/to/org --out fleet-reports
 ```
 
 ## Repository layout
@@ -96,6 +103,7 @@ python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
 | `config/industry-profiles/` | Federal/Defense, Regulated, Commercial overlays |
 | `src/sre_governance/` | Deterministic engine + CLI (no AI, no network) |
 | `policies/` | Human-readable policies + OPA/Rego policy-as-code |
+| `scripts/` | Local OPA gate runner + fleet-aggregation tooling |
 | `agents/copilot/` | **GitHub Copilot** edition (instructions, chat mode, prompts, workflows) |
 | `agents/claude/` | **Claude** edition (CLAUDE.md, subagents, skills, commands, hooks) |
 | `reporting/` | Report templates/assets |

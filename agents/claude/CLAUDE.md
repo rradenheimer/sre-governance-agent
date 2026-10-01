@@ -30,6 +30,8 @@ export PYTHONPATH=src
 python -m sre_governance.cli validate-config
 python -m sre_governance.cli scan --repo . --profile <federal-defense|regulated|commercial>
 python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
+# Optional: enforce the policy-as-code gate locally (OPA/conftest or Python fallback)
+python scripts/opa_gate.py --report sre-reports/sre-governance-report.json
 ```
 
 Default profile is `commercial` unless `.sre/profile` says otherwise.

@@ -109,6 +109,11 @@ jobs:
       - name: Verify audit chain
         run: PYTHONPATH=src python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
 
+      - name: Policy-as-code gate (OPA/Rego with Python fallback, advisory)
+        continue-on-error: true
+        run: |
+          python scripts/opa_gate.py --report sre-reports/sre-governance-report.json
+
       - name: Upload SARIF to Security tab
         if: always()
         uses: github/codeql-action/upload-sarif@v3
