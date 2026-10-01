@@ -214,6 +214,20 @@ jobs:
     assert has_sca_configuration(scan_repo(tmp_path))
 
     dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace("cronjob: 0 9 * * 1", "cronjob: 60 9 * * 1"),
+        encoding="utf-8",
+    )
+    assert not has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
+        dependabot.read_text(encoding="utf-8").replace(
+            "60 9 * * 1", '"*/15 9-17 * * 1"',
+        ),
+        encoding="utf-8",
+    )
+    assert has_sca_configuration(scan_repo(tmp_path))
+
+    dependabot.write_text(
         "version: 2\nupdates:\n"
         "  - package-ecosystem: pip\n"
         "    directory: /\n"

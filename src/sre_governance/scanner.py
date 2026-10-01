@@ -476,7 +476,35 @@ def _dependabot_update_enabled(item: Any) -> bool:
     if interval in {"daily", "weekly", "monthly", "quarterly", "semiannually", "yearly"}:
         return True
     return interval == "cron" and isinstance(schedule.get("cronjob"), str) \
-        and bool(schedule["cronjob"].strip())
+        and _valid_cronjob(schedule["cronjob"])
+
+
+def _valid_cronjob(expression: str) -> bool:
+    limits = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
+    fields = expression.split()
+    return len(fields) == len(limits) and all(
+        _valid_cron_field(field, minimum, maximum)
+        for field, (minimum, maximum) in zip(fields, limits)
+    )
+
+
+def _valid_cron_field(field: str, minimum: int, maximum: int) -> bool:
+    for item in field.split(","):
+        base, separator, step = item.partition("/")
+        if separator and (not step.isdigit() or int(step) == 0):
+            return False
+        if base == "*":
+            continue
+        if "-" in base:
+            start, end = base.split("-", 1)
+            if not start.isdigit() or not end.isdigit() \
+                    or int(start) > int(end) \
+                    or not minimum <= int(start) <= maximum \
+                    or not minimum <= int(end) <= maximum:
+                return False
+        elif not base.isdigit() or not minimum <= int(base) <= maximum:
+            return False
+    return True
 
 
 def _continues_on_error(config: dict[str, Any]) -> bool:
