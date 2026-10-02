@@ -127,7 +127,7 @@ def test_sast_control_requires_analyzer_invocation(tmp_path):
     workflows.mkdir(parents=True)
     workflow = workflows / "sast.yml"
     workflow.write_text(
-        "name: Scan\non: [pull_request]\njobs:\n  scan:\n    steps:\n"
+        "name: Scan\non: [push, pull_request]\njobs:\n  scan:\n    steps:\n"
         "      - uses: github/codeql-action/upload-sarif@v3\n",
         encoding="utf-8",
     )
@@ -137,7 +137,7 @@ def test_sast_control_requires_analyzer_invocation(tmp_path):
     assert result.status == FAIL
 
     workflow.write_text(
-        "name: Scan\non: [pull_request]\njobs:\n  scan:\n    steps:\n"
+        "name: Scan\non: [push, pull_request]\njobs:\n  scan:\n    steps:\n"
         "      - uses: github/codeql-action/analyze@v3\n",
         encoding="utf-8",
     )
@@ -145,3 +145,39 @@ def test_sast_control_requires_analyzer_invocation(tmp_path):
         scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
     )
     assert result.status == PASS
+
+
+def test_sast_control_requires_pull_request_and_push_triggers(tmp_path):
+    catalog, profiles = _ctx()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    workflow = workflows / "sast.yml"
+    workflow.write_text(
+        "name: Scan\non: [workflow_dispatch]\njobs:\n  scan:\n    steps:\n"
+        "      - uses: github/codeql-action/analyze@v3\n",
+        encoding="utf-8",
+    )
+    result = evaluate_control(
+        scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+    )
+    assert result.status == FAIL
+
+
+def test_sast_control_ignores_disabled_analyzer_job_or_step(tmp_path):
+    catalog, profiles = _ctx()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    workflow = workflows / "sast.yml"
+    workflow.write_text(
+        "name: Scan\non: [push, pull_request]\njobs:\n"
+        "  disabled-job:\n    if: false\n    steps:\n"
+        "      - uses: github/codeql-action/analyze@v3\n"
+        "  disabled-step:\n    steps:\n"
+        "      - if: ${{ false }}\n"
+        "        uses: github/codeql-action/analyze@v3\n",
+        encoding="utf-8",
+    )
+    result = evaluate_control(
+        scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+    )
+    assert result.status == FAIL

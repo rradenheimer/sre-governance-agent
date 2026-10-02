@@ -139,17 +139,25 @@ def _workflow_uses_sast_analyzer(text: str) -> bool:
         workflow = yaml.safe_load(text) or {}
     except yaml.YAMLError:
         return False
+    if not isinstance(workflow, dict):
+        return False
+    triggers = workflow.get("on", workflow.get(True, []))
+    if isinstance(triggers, dict):
+        if not {"push", "pull_request"}.issubset(triggers):
+            return False
+    elif not isinstance(triggers, list) or not {"push", "pull_request"}.issubset(triggers):
+        return False
     jobs = workflow.get("jobs", {}) if isinstance(workflow, dict) else {}
     if not isinstance(jobs, dict):
         return False
     for job in jobs.values():
-        if not isinstance(job, dict):
+        if not isinstance(job, dict) or _condition_is_false(job.get("if")):
             continue
         steps = job.get("steps", [])
         if not isinstance(steps, list):
             continue
         for step in steps:
-            if not isinstance(step, dict):
+            if not isinstance(step, dict) or _condition_is_false(step.get("if")):
                 continue
             action = step.get("uses", "")
             if isinstance(action, str) and action.lower().split("@", 1)[0] in _SAST_ACTIONS:
@@ -158,3 +166,10 @@ def _workflow_uses_sast_analyzer(text: str) -> bool:
             if isinstance(command, str) and _SAST_COMMAND.search(command):
                 return True
     return False
+
+
+def _condition_is_false(condition: Any) -> bool:
+    return condition is False or (
+        isinstance(condition, str)
+        and condition.strip().lower() in {"false", "${{ false }}"}
+    )
