@@ -152,14 +152,22 @@ def _workflow_uses_sast_analyzer(text: str) -> bool:
     if not isinstance(jobs, dict):
         return False
     for job in jobs.values():
-        if not isinstance(job, dict) or _condition_is_false(job.get("if")):
+        if (
+            not isinstance(job, dict)
+            or _condition_is_false(job.get("if"))
+            or _value_is_true(job.get("continue-on-error"))
+        ):
             continue
         steps = job.get("steps", [])
         if not isinstance(steps, list):
             continue
         codeql_init_seen = False
         for step in steps:
-            if not isinstance(step, dict) or _condition_is_false(step.get("if")):
+            if (
+                not isinstance(step, dict)
+                or _condition_is_false(step.get("if"))
+                or _value_is_true(step.get("continue-on-error"))
+            ):
                 continue
             action = step.get("uses", "")
             if isinstance(action, str):
@@ -181,4 +189,11 @@ def _condition_is_false(condition: Any) -> bool:
     return condition is False or (
         isinstance(condition, str)
         and condition.strip().lower() in {"false", "${{ false }}"}
+    )
+
+
+def _value_is_true(value: Any) -> bool:
+    return value is True or (
+        isinstance(value, str)
+        and value.strip().lower() in {"true", "${{ true }}"}
     )

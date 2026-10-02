@@ -39,7 +39,8 @@ src/sre_governance/
   values, but the CLI scan uses declarations as attestations.
 - Each control declares a **check** evaluated by a named function in
   `engine.CHECKS`: `file_exists`, `file_absent`, `workflow_present`,
-  `content_match`, `metadata_true`, `metadata_gte`, `metadata_in`.
+  `content_match`, `metadata_true`, `metadata_all_true`, `audit_log_valid`,
+  `metadata_gte`, `metadata_in`.
 - A **profile** maps each control to `mandatory` / `recommended` /
   `not_applicable` and sets thresholds (reviewers, min score, failure budgets).
 - **Scoring** is severity-weighted (critical 10, high 6, medium 3, low 1) over

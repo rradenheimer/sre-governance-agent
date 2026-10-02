@@ -216,6 +216,22 @@ def test_sast_control_requires_analyzer_invocation(tmp_path):
     assert result.status == PASS
 
 
+def test_sast_control_detects_one_line_run_command(tmp_path):
+    catalog, profiles = _ctx()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    workflow = workflows / "sast.yml"
+    workflow.write_text(
+        "name: Scan\non: [push, pull_request]\njobs:\n  scan:\n    steps:\n"
+        "      - run: semgrep scan --config auto .\n",
+        encoding="utf-8",
+    )
+    result = evaluate_control(
+        scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+    )
+    assert result.status == PASS
+
+
 def test_sast_control_requires_pull_request_and_push_triggers(tmp_path):
     catalog, profiles = _ctx()
     workflows = tmp_path / ".github" / "workflows"
@@ -230,6 +246,34 @@ def test_sast_control_requires_pull_request_and_push_triggers(tmp_path):
         scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
     )
     assert result.status == FAIL
+
+
+def test_sast_control_ignores_continue_on_error_analyzers(tmp_path):
+    catalog, profiles = _ctx()
+    workflows = tmp_path / ".github" / "workflows"
+    workflows.mkdir(parents=True)
+    workflow = workflows / "sast.yml"
+    for job in (
+        "  scan:\n    continue-on-error: true\n    steps:\n"
+        "      - uses: github/codeql-action/init@v3\n"
+        "      - uses: github/codeql-action/analyze@v3\n",
+        "  scan:\n    steps:\n"
+        "      - uses: github/codeql-action/init@v3\n"
+        "      - continue-on-error: true\n"
+        "        uses: github/codeql-action/analyze@v3\n",
+        "  scan:\n    steps:\n"
+        "      - continue-on-error: true\n"
+        "        uses: github/codeql-action/init@v3\n"
+        "      - uses: github/codeql-action/analyze@v3\n",
+    ):
+        workflow.write_text(
+            "name: Scan\non: [push, pull_request]\njobs:\n" + job,
+            encoding="utf-8",
+        )
+        result = evaluate_control(
+            scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+        )
+        assert result.status == FAIL
 
 
 def test_sast_control_ignores_disabled_analyzer_job_or_step(tmp_path):
