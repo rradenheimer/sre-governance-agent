@@ -71,6 +71,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: sre-governance-reports
+          include-hidden-files: true
           path: |
             sre-reports/
             .sre/audit.jsonl

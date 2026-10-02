@@ -27,7 +27,6 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           repository: ${{ github.repository }}
           path: sre-reports
-        continue-on-error: true
 
       - name: Resolve SARIF ref
         id: sarif-ref
