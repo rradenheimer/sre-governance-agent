@@ -28,7 +28,8 @@ SECRET_PATTERNS = [
 
 # Commands that are never allowed from the agent.
 FORBIDDEN_CMD = [
-    r"\bgh\s+pr\s+(merge|review\s+--approve)\b",
+    r"\bgh\s+pr\s+merge\b",
+    r"\bgh\s+pr\s+review\b[^;&|\n]*--approve\b",
     r"rm\s+-rf\s+/(?!\w)",
 ]
 
