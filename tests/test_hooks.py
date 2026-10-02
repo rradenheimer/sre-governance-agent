@@ -48,6 +48,24 @@ def test_secret_guard_blocks_audit_edit():
     assert r.returncode == 2
 
 
+def test_secret_guard_blocks_bash_access_to_denied_secret_paths():
+    for command in (
+        "cat .env",
+        "grep TOKEN /workspace/.env.production",
+        "python -c \"open('/workspace/.env').read()\"",
+        "sed -n '1p' certs/server.pem",
+        "node -e \"require('fs').readFileSync('id_rsa')\"",
+    ):
+        r = _run(SECRET_GUARD, {"tool_name": "Bash", "tool_input": {"command": command}})
+        assert r.returncode == 2, command
+
+    r = _run(SECRET_GUARD, {
+        "tool_name": "Bash",
+        "tool_input": {"command": "python -c \"print('hello')\""},
+    })
+    assert r.returncode == 0
+
+
 def test_secret_guard_blocks_force_push():
     r = _run(SECRET_GUARD, {"tool_name": "Bash",
                             "tool_input": {"command": "git push --force origin main"}})

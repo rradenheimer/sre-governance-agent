@@ -33,6 +33,11 @@ FORBIDDEN_CMD = [
 ]
 
 PROTECTED_WRITE = (".sre/audit.jsonl",)
+DENIED_READ_PATTERNS = (
+    r"(?:^|[/\\\s\"'=(:,])\.env(?:\.[^/\\\s\"'()<>|;&]*)?(?=$|[/\\\s\"'(),<>|;&])",
+    r"(?:^|[/\\\s\"'=(:,])[^/\\\s\"'()<>|;&]*\.pem(?=$|[/\\\s\"'(),<>|;&])",
+    r"(?:^|[/\\\s\"'=(:,])id_rsa[^/\\\s\"'()<>|;&]*(?=$|[/\\\s\"'(),<>|;&])",
+)
 READ_ONLY_AUDIT_COMMANDS = {"cat", "diff", "file", "grep", "head", "less",
                             "sha256sum", "stat", "tail", "wc"}
 
@@ -113,6 +118,10 @@ def _bash_mutates_protected_audit(command: str) -> bool:
             and not _is_read_only_audit_command(command))
 
 
+def _bash_reads_denied_secret_path(command: str) -> bool:
+    return any(re.search(pattern, command) for pattern in DENIED_READ_PATTERNS)
+
+
 def _blob(tool_input: dict) -> str:
     parts = []
     for key in ("command", "content", "new_string", "file_text"):
@@ -148,6 +157,11 @@ def main() -> int:
         return 2
 
     command = tool_input.get("command")
+    if isinstance(command, str) and _bash_reads_denied_secret_path(command):
+        print("BLOCKED: Bash commands may not access credential files denied by "
+              "Claude settings.", file=sys.stderr)
+        return 2
+
     if isinstance(command, str) and _bash_mutates_protected_audit(command):
         print("BLOCKED: Bash commands may not modify the append-only audit log "
               "(.sre/audit.jsonl).", file=sys.stderr)
