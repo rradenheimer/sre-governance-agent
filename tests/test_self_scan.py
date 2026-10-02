@@ -104,7 +104,22 @@ def test_workflow_security_and_validation_gates():
     )
     assert report["on"]["workflow_run"]["workflows"] == ["SRE Governance"]
     assert report["jobs"]["publish"]["permissions"]["pull-requests"] == "write"
+    download = next(
+        step for step in report["jobs"]["publish"]["steps"]
+        if step.get("uses", "").startswith("actions/download-artifact@")
+    )
+    assert download["uses"] == "actions/download-artifact@v4.1.3"
     assert not any(
         step.get("uses", "").startswith("actions/checkout@")
         for step in report["jobs"]["publish"]["steps"]
     )
+    vendored_report = yaml.load(
+        (ROOT / "agents" / "copilot" / ".github" / "workflows"
+         / "sre-governance-report.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    vendored_download = next(
+        step for step in vendored_report["jobs"]["publish"]["steps"]
+        if step.get("uses", "").startswith("actions/download-artifact@")
+    )
+    assert vendored_download["uses"] == download["uses"]
