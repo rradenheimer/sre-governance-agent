@@ -93,14 +93,20 @@ def load_profile(path: str | Path) -> Profile:
     enforcement = raw.get("enforcement", "warning")
     if enforcement not in {"blocking", "warning"}:
         raise ValueError(f"Invalid enforcement '{enforcement}' in {path}")
+    ai_autonomy = raw.get("ai_autonomy", "suggest_only")
+    if ai_autonomy not in {"suggest_only", "propose_pr", "never"}:
+        raise ValueError(f"Invalid ai_autonomy '{ai_autonomy}' in {path}")
+    require_human_approval = raw.get("require_human_approval", True)
+    if not isinstance(require_human_approval, bool):
+        raise ValueError(f"Invalid require_human_approval in {path}: expected boolean")
     return Profile(
         profile=raw["profile"],
         display_name=raw.get("display_name", raw["profile"]),
         description=raw.get("description", "").strip(),
         baseline=raw.get("baseline", "standard"),
         enforcement=enforcement,
-        ai_autonomy=raw.get("ai_autonomy", "suggest_only"),
-        require_human_approval=bool(raw.get("require_human_approval", True)),
+        ai_autonomy=ai_autonomy,
+        require_human_approval=require_human_approval,
         frameworks=list(raw.get("frameworks", [])),
         thresholds=raw.get("thresholds", {}) or {},
         default_status=default_status,
