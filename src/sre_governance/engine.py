@@ -114,6 +114,18 @@ def _check_metadata_true(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, 
     return False, f"{key} is not true (got {val!r})"
 
 
+def _check_metadata_all_true(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    keys = params["keys"]
+    invalid = [
+        f"{key}={scan.metadata_value(key)!r}"
+        for key in keys
+        if scan.metadata_value(key) is not True
+    ]
+    if invalid:
+        return False, f"{', '.join(invalid)}; expected true"
+    return True, f"all of {', '.join(keys)} are true"
+
+
 def _check_audit_log_valid(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     declared, reason = _check_metadata_true(scan, params)
     if not declared:
@@ -159,6 +171,7 @@ CHECKS: dict[str, CheckFn] = {
     "workflow_present": _check_workflow_present,
     "content_match": _check_content_match,
     "metadata_true": _check_metadata_true,
+    "metadata_all_true": _check_metadata_all_true,
     "audit_log_valid": _check_audit_log_valid,
     "metadata_gte": _check_metadata_gte,
     "metadata_in": _check_metadata_in,

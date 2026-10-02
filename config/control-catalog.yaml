@@ -218,8 +218,10 @@ controls:
     description: Repository scans for committed secrets and blocks pushes containing them.
     rationale: Leaked credentials are a top cause of breaches.
     check:
-      type: metadata_true
-      key: security.secret_scanning
+      type: metadata_all_true
+      keys:
+        - security.secret_scanning
+        - security.push_protection
     remediation: Enable secret scanning and push protection; rotate any exposed secrets.
     mappings:
       NIST-800-53: ["IA-5", "SA-15"]

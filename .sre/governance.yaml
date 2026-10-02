@@ -10,6 +10,7 @@ governance:
   audit_logging: true
 security:
   secret_scanning: true
+  push_protection: true
 sre:
   error_budget_policy_defined: true
   dr_tested: true

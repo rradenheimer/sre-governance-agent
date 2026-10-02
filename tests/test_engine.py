@@ -122,6 +122,24 @@ def test_metadata_true_rejects_string_false():
     assert result.status == FAIL
 
 
+def test_secret_control_requires_scanning_and_push_protection():
+    catalog, profiles = _ctx()
+    scan = scan_repo(GOOD)
+    control = catalog.get("SEC-SECRETS-020")
+
+    assert evaluate_control(scan, control, profiles["commercial"]).status == PASS
+
+    scan.metadata["security"]["push_protection"] = False
+    result = evaluate_control(scan, control, profiles["commercial"])
+    assert result.status == FAIL
+    assert "security.push_protection=False" in result.reason
+
+    del scan.metadata["security"]["push_protection"]
+    result = evaluate_control(scan, control, profiles["commercial"])
+    assert result.status == FAIL
+    assert "security.push_protection=None" in result.reason
+
+
 def test_audit_control_requires_valid_audit_log(tmp_path):
     catalog, profiles = _ctx()
     audit_path = tmp_path / ".sre" / "audit.jsonl"
