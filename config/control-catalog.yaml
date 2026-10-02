@@ -343,8 +343,9 @@ controls:
     description: Automation (incl. AI agents) must emit an immutable audit trail.
     rationale: Transparency and accountability for autonomous changes.
     check:
-      type: metadata_true
+      type: audit_log_valid
       key: governance.audit_logging
+      path: .sre/audit.jsonl
     remediation: Enable audit logging for the SRE Governance Agent (audit.jsonl + provenance).
     mappings:
       NIST-800-53: ["AU-2", "AU-3", "AU-12"]

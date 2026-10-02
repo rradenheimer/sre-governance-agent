@@ -1,6 +1,7 @@
 from dataclasses import replace
 from pathlib import Path
 
+from sre_governance.audit import AuditLogger
 from sre_governance.catalog import Catalog, Control, load_catalog, load_profiles
 from sre_governance.engine import FAIL, NA, PASS, evaluate, evaluate_control
 from sre_governance.scanner import merge_api_metadata, scan_repo
@@ -119,6 +120,34 @@ def test_metadata_true_rejects_string_false():
         scan, catalog.get("SEC-SECRETS-020"), profiles["commercial"]
     )
     assert result.status == FAIL
+
+
+def test_audit_control_requires_valid_audit_log(tmp_path):
+    catalog, profiles = _ctx()
+    audit_path = tmp_path / ".sre" / "audit.jsonl"
+    audit_path.parent.mkdir(parents=True)
+    (audit_path.parent / "governance.yaml").write_text(
+        "governance:\n  audit_logging: true\n", encoding="utf-8"
+    )
+    control = catalog.get("CMP-AUDIT-033")
+
+    result = evaluate_control(scan_repo(tmp_path), control, profiles["commercial"])
+    assert result.status == FAIL
+    assert "missing" in result.reason
+
+    AuditLogger(audit_path).record("scan", target="test-repo")
+    result = evaluate_control(scan_repo(tmp_path), control, profiles["commercial"])
+    assert result.status == PASS
+
+    audit_path.write_text(
+        audit_path.read_text(encoding="utf-8").replace(
+            '"hash": "', '"hash": "' + "0" * 64, 1
+        ),
+        encoding="utf-8",
+    )
+    result = evaluate_control(scan_repo(tmp_path), control, profiles["commercial"])
+    assert result.status == FAIL
+    assert "failed verification" in result.reason
 
 
 def test_sast_control_requires_analyzer_invocation(tmp_path):

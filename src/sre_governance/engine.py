@@ -9,6 +9,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from sre_governance.audit import AuditLogger
 from sre_governance.catalog import Catalog, Control, Profile
 from sre_governance.scanner import RepoScan, keyword_in_workflows
 
@@ -113,6 +114,24 @@ def _check_metadata_true(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, 
     return False, f"{key} is not true (got {val!r})"
 
 
+def _check_audit_log_valid(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
+    declared, reason = _check_metadata_true(scan, params)
+    if not declared:
+        return False, reason
+
+    path = params["path"]
+    if not scan.has_path(path):
+        return False, f"{path} is missing"
+
+    try:
+        valid, reason = AuditLogger(scan.root / path).verify()
+    except (OSError, UnicodeError) as exc:
+        return False, f"{path} could not be verified: {exc}"
+    if not valid:
+        return False, f"{path} failed verification: {reason}"
+    return True, reason
+
+
 def _check_metadata_gte(scan: RepoScan, params: dict[str, Any]) -> tuple[bool, str]:
     key = params["key"]
     threshold = params["value"]
@@ -140,6 +159,7 @@ CHECKS: dict[str, CheckFn] = {
     "workflow_present": _check_workflow_present,
     "content_match": _check_content_match,
     "metadata_true": _check_metadata_true,
+    "audit_log_valid": _check_audit_log_valid,
     "metadata_gte": _check_metadata_gte,
     "metadata_in": _check_metadata_in,
 }
