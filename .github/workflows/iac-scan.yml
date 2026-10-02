@@ -17,6 +17,7 @@ jobs:
       matrix:
         workflow:
           - sre-governance.yml
+          - sre-governance-report.yml
           - policy-validation.yml
           - iac-scan.yml
           - release.yml

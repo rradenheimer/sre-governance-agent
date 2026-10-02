@@ -38,5 +38,6 @@ The hooks are plain Python with no third-party deps.
 - `audit_logger` (PostToolUse/Stop) appends tamper-evident records that the
   engine's `verify-audit` can validate.
 - `settings.json` denies reading `.env`/keys and asks before `git push`.
-- Autonomy is bound by the active profile's `ai_autonomy`
-  (`suggest_only` for Federal/Defense).
+- The active profile's `ai_autonomy` configures agent guidance (for example,
+  `suggest_only` for Federal/Defense); it is not runtime enforcement of edits
+  or PR creation.

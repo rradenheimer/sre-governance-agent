@@ -51,14 +51,21 @@ def main() -> int:
 
     tool_name = payload.get("tool_name", "")
     tool_input = payload.get("tool_input", {}) or {}
+    tool_response = payload.get("tool_response", {}) or {}
     target = tool_input.get("file_path") or tool_name or "-"
+    is_error = (
+        payload.get("hook_event_name") == "PostToolUseFailure"
+        or bool(payload.get("is_error") or payload.get("error"))
+        or (isinstance(tool_response, dict)
+            and bool(tool_response.get("is_error") or tool_response.get("error")))
+    )
 
     record = {
         "ts": _now(),
         "actor": "claude-agent",
         "action": event if event == "session_stop" else f"tool:{tool_name}",
         "target": str(target),
-        "outcome": "success",
+        "outcome": "error" if is_error else "success",
         "details": {"session_id": payload.get("session_id", "")},
         "prev_hash": _last_hash(),
         "hash": "",

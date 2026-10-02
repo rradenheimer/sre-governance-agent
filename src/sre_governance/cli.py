@@ -75,7 +75,7 @@ def cmd_scan(args: argparse.Namespace) -> int:
     print(f"Reports written to: {out_dir}")
 
     if assessment.gate.should_fail_pipeline:
-        print("Policy gate failed under BLOCKING enforcement.", file=sys.stderr)
+        print("Policy gate failed; see gate reasons above.", file=sys.stderr)
         return 1
     return 0
 

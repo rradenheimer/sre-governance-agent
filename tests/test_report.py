@@ -70,3 +70,13 @@ def test_audit_chain_detects_tampering(tmp_path):
     ok, msg = AuditLogger(log).verify()
     assert not ok
     assert "tampered" in msg or "broken" in msg
+
+
+def test_audit_verify_reports_malformed_records(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    log.write_text('{"ts": "truncated"\n', encoding="utf-8")
+
+    ok, msg = AuditLogger(log).verify()
+
+    assert not ok
+    assert "malformed record 1" in msg

@@ -44,7 +44,7 @@ class Profile:
     description: str
     baseline: str
     enforcement: str                 # blocking | warning
-    ai_autonomy: str                 # suggest_only | propose_pr | never
+    ai_autonomy: str                 # Advisory agent guidance, not runtime-enforced
     require_human_approval: bool
     frameworks: list[str]
     thresholds: dict[str, Any]

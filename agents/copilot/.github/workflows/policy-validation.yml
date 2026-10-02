@@ -11,6 +11,9 @@ on:
       - "src/**"
       - "tests/**"
       - "policies/**"
+      - "requirements.txt"
+      - "pytest.ini"
+      - "conftest.py"
   push:
     branches: [main, master]
   workflow_dispatch:
@@ -37,6 +40,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/conftest"
           curl -fsSL "https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz" \
             -o "$RUNNER_TEMP/conftest.tar.gz"
+          echo "620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5  $RUNNER_TEMP/conftest.tar.gz" \
+            | sha256sum --check -
           tar -xzf "$RUNNER_TEMP/conftest.tar.gz" -C "$RUNNER_TEMP/conftest" conftest
           echo "$RUNNER_TEMP/conftest" >> "$GITHUB_PATH"
       - name: Verify OPA policies

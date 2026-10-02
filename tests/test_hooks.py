@@ -23,6 +23,18 @@ def test_secret_guard_allows_benign():
     assert r.returncode == 0
 
 
+def test_secret_guard_blocks_malformed_input():
+    for payload in ("not-json", "[]", '{"tool_name":"Bash"}'):
+        r = subprocess.run(
+            [sys.executable, str(SECRET_GUARD)],
+            input=payload,
+            capture_output=True,
+            text=True,
+        )
+        assert r.returncode == 2
+        assert "malformed hook input" in r.stderr.lower() or "unable to parse" in r.stderr.lower()
+
+
 def test_secret_guard_blocks_aws_key():
     r = _run(SECRET_GUARD, {"tool_name": "Write",
                             "tool_input": {"file_path": "a.txt", "content": "AKIAIOSFODNN7EXAMPLE"}})
@@ -86,3 +98,18 @@ def test_audit_logger_writes_verifiable_chain(tmp_path):
     from sre_governance.audit import AuditLogger
     ok, msg = AuditLogger(audit).verify()
     assert ok, msg
+
+
+def test_audit_logger_records_failed_tool_outcome(tmp_path):
+    _run(
+        AUDIT_LOGGER,
+        {
+            "hook_event_name": "PostToolUseFailure",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "a.py"},
+            "tool_response": {"error": "edit failed"},
+        },
+        cwd=tmp_path,
+    )
+    record = json.loads((tmp_path / ".sre" / "audit.jsonl").read_text().splitlines()[0])
+    assert record["outcome"] == "error"

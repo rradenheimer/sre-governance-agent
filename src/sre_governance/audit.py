@@ -75,9 +75,12 @@ class AuditLogger:
             line = line.strip()
             if not line:
                 continue
-            rec = json.loads(line)
-            stored = rec.get("hash", "")
-            event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
+            try:
+                rec = json.loads(line)
+                stored = rec.get("hash", "")
+                event = AuditEvent(**{k: v for k, v in rec.items() if k != "hash"})
+            except (json.JSONDecodeError, AttributeError, TypeError, ValueError) as exc:
+                return False, f"malformed record {i}: {exc}"
             if rec.get("prev_hash") != prev:
                 return False, f"broken chain at record {i}: prev_hash mismatch"
             if event.compute_hash() != stored:

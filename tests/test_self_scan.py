@@ -71,3 +71,40 @@ def test_release_and_iac_workflows_have_real_gates():
                and step.get("with", {}).get("framework") == "github_actions"
                and step["with"].get("soft_fail") == "false"
                for step in steps)
+
+
+def test_workflow_security_and_validation_gates():
+    workflows = ROOT / ".github" / "workflows"
+    validation = yaml.load(
+        (workflows / "policy-validation.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    paths = validation["on"]["pull_request"]["paths"]
+    assert {"requirements.txt", "pytest.ini", "conftest.py"} <= set(paths)
+    install = next(
+        step["run"] for step in validation["jobs"]["validate"]["steps"]
+        if step.get("name") == "Install Conftest"
+    )
+    assert "sha256sum --check -" in install
+
+    scan = yaml.load(
+        (workflows / "sre-governance.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    assert scan["permissions"] == {"contents": "read"}
+    assert not any(
+        step.get("uses", "").startswith("actions/github-script@")
+        or step.get("uses", "").startswith("github/codeql-action/upload-sarif@")
+        for step in scan["jobs"]["governance-scan"]["steps"]
+    )
+
+    report = yaml.load(
+        (workflows / "sre-governance-report.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    assert report["on"]["workflow_run"]["workflows"] == ["SRE Governance"]
+    assert report["jobs"]["publish"]["permissions"]["pull-requests"] == "write"
+    assert not any(
+        step.get("uses", "").startswith("actions/checkout@")
+        for step in report["jobs"]["publish"]["steps"]
+    )

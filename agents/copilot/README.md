@@ -11,7 +11,8 @@ Drop-in agent configuration for GitHub Copilot (VS Code + Copilot coding agent).
 | `.github/prompts/sre-scan.prompt.md` | `/sre-scan` — full compliance scan |
 | `.github/prompts/sre-remediate.prompt.md` | `/sre-remediate` — minimal fix via PR |
 | `.github/prompts/sre-onboard.prompt.md` | `/sre-onboard` — baseline a new repo |
-| `.github/workflows/sre-governance.yml` | CI gate: scan → SARIF → PR comment → enforce |
+| `.github/workflows/sre-governance.yml` | Read-only CI scan and policy gate |
+| `.github/workflows/sre-governance-report.yml` | Trusted SARIF upload and PR report publisher |
 | `.github/workflows/policy-validation.yml` | Validate catalog/profiles + run engine tests |
 | `AGENTS.md` | Rules for the Copilot coding agent |
 
@@ -25,11 +26,12 @@ either vendor `src/sre_governance/` or `pip install` the internal package.
 
 - In VS Code Copilot Chat, select the **SRE Governance** chat mode, or run a
   prompt: `/sre-scan`, `/sre-remediate`, `/sre-onboard`.
-- On every PR, the `SRE Governance` workflow posts the report and enforces the
-  gate per the repo's `.sre/profile`.
+- On every PR, the `SRE Governance` workflow scans and enforces the gate per the
+  repo's `.sre/profile`; its trusted report workflow publishes the results.
 
 ## Guarantees
 
-The agent is read-only by default, proposes changes only as reviewed PRs, never
-self-approves/merges, and records all actions to `.sre/audit.jsonl`. Pass/fail is
+Agent instructions direct it to propose changes only as reviewed PRs, never
+self-approve/merge, and record actions to `.sre/audit.jsonl`. These are behavioral
+guardrails, not runtime enforcement of file edits or PR creation. Pass/fail is
 always computed by the deterministic engine, never by the model.

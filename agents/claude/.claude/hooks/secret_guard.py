@@ -126,7 +126,17 @@ def main() -> int:
     try:
         payload = json.load(sys.stdin)
     except Exception:
-        return 0  # fail-open on malformed payloads; never crash the agent
+        print("BLOCKED: unable to parse hook input; secret and audit-path checks "
+              "were not performed.", file=sys.stderr)
+        return 2
+
+    if (not isinstance(payload, dict)
+            or not isinstance(payload.get("tool_name"), str)
+            or not payload.get("tool_name")
+            or not isinstance(payload.get("tool_input"), dict)):
+        print("BLOCKED: malformed hook input; secret and audit-path checks "
+              "were not performed.", file=sys.stderr)
+        return 2
 
     tool_input = payload.get("tool_input", {}) or {}
     target = tool_input.get("file_path", "") or ""

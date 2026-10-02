@@ -37,6 +37,14 @@
         ]
       }
     ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit",
+        "hooks": [
+          { "type": "command", "command": "python .claude/hooks/audit_logger.py" }
+        ]
+      }
+    ],
     "Stop": [
       {
         "matcher": "*",
