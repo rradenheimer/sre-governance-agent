@@ -22,12 +22,13 @@ _IGNORE_DIRS = {".git", "node_modules", ".venv", "venv", "__pycache__", "dist", 
 _WORKFLOW_GLOBS = (".github/workflows/*.yml", ".github/workflows/*.yaml")
 _METADATA_PATHS = (".sre/governance.yaml", ".sre/governance.yml")
 _SAST_ACTIONS = {
-    "github/codeql-action/analyze",
     "returntocorp/semgrep-action",
     "semgrep/semgrep-action",
     "sonarsource/sonarcloud-github-action",
     "sonarsource/sonarqube-scan-action",
 }
+_CODEQL_INIT_ACTION = "github/codeql-action/init"
+_CODEQL_ANALYZE_ACTION = "github/codeql-action/analyze"
 _SAST_COMMAND = re.compile(
     r"(?m)(?:^|[;&|]\s*)(?:[A-Za-z_][A-Za-z0-9_]*=\S+\s+)*(?:sudo\s+)?"
     r"(?:semgrep(?:\s+(?:scan|ci)\b|\s+--config(?:\s|=))|"
@@ -156,12 +157,20 @@ def _workflow_uses_sast_analyzer(text: str) -> bool:
         steps = job.get("steps", [])
         if not isinstance(steps, list):
             continue
+        codeql_init_seen = False
         for step in steps:
             if not isinstance(step, dict) or _condition_is_false(step.get("if")):
                 continue
             action = step.get("uses", "")
-            if isinstance(action, str) and action.lower().split("@", 1)[0] in _SAST_ACTIONS:
-                return True
+            if isinstance(action, str):
+                action_name = action.lower().split("@", 1)[0]
+                if action_name == _CODEQL_INIT_ACTION:
+                    codeql_init_seen = True
+                elif action_name == _CODEQL_ANALYZE_ACTION:
+                    if codeql_init_seen:
+                        return True
+                elif action_name in _SAST_ACTIONS:
+                    return True
             command = step.get("run", "")
             if isinstance(command, str) and _SAST_COMMAND.search(command):
                 return True

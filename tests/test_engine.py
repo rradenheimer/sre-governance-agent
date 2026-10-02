@@ -144,6 +144,28 @@ def test_sast_control_requires_analyzer_invocation(tmp_path):
     result = evaluate_control(
         scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
     )
+    assert result.status == FAIL
+
+    workflow.write_text(
+        "name: Scan\non: [push, pull_request]\njobs:\n"
+        "  init:\n    steps:\n      - uses: github/codeql-action/init@v3\n"
+        "  analyze:\n    steps:\n      - uses: github/codeql-action/analyze@v3\n",
+        encoding="utf-8",
+    )
+    result = evaluate_control(
+        scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+    )
+    assert result.status == FAIL
+
+    workflow.write_text(
+        "name: Scan\non: [push, pull_request]\njobs:\n  scan:\n    steps:\n"
+        "      - uses: github/codeql-action/init@v3\n"
+        "      - uses: github/codeql-action/analyze@v3\n",
+        encoding="utf-8",
+    )
+    result = evaluate_control(
+        scan_repo(tmp_path), catalog.get("SEC-SAST-021"), profiles["commercial"]
+    )
     assert result.status == PASS
 
 
@@ -171,10 +193,12 @@ def test_sast_control_ignores_disabled_analyzer_job_or_step(tmp_path):
     workflow.write_text(
         "name: Scan\non: [push, pull_request]\njobs:\n"
         "  disabled-job:\n    if: false\n    steps:\n"
+        "      - uses: github/codeql-action/init@v3\n"
         "      - uses: github/codeql-action/analyze@v3\n"
-        "  disabled-step:\n    steps:\n"
+        "  disabled-init:\n    steps:\n"
         "      - if: ${{ false }}\n"
-        "        uses: github/codeql-action/analyze@v3\n",
+        "        uses: github/codeql-action/init@v3\n"
+        "      - uses: github/codeql-action/analyze@v3\n",
         encoding="utf-8",
     )
     result = evaluate_control(
