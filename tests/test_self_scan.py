@@ -29,6 +29,16 @@ def test_commercial_self_scan_reaches_client_target():
 
 def test_release_and_iac_workflows_have_real_gates():
     workflows = ROOT / ".github" / "workflows"
+    codeql = yaml.load(
+        (workflows / "codeql.yml").read_text(encoding="utf-8"),
+        Loader=yaml.BaseLoader,
+    )
+    assert {"pull_request", "push"} <= set(codeql["on"])
+    analyze_steps = codeql["jobs"]["analyze"]["steps"]
+    assert any(step.get("uses", "").startswith("github/codeql-action/init@")
+               for step in analyze_steps)
+    assert any(step.get("uses", "").startswith("github/codeql-action/analyze@")
+               and not step.get("continue-on-error") for step in analyze_steps)
     release = yaml.load(
         (workflows / "release.yml").read_text(encoding="utf-8"),
         Loader=yaml.BaseLoader,

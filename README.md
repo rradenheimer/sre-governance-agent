@@ -102,6 +102,9 @@ python -m sre_governance.cli verify-audit --audit .sre/audit.jsonl
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the rollout playbook (org-wide
 templates, phased enforcement, fleet reporting, and the staged GitHub Releases
 source-archive/SBOM pipeline). The CI/CD workflows are scanned with Checkov.
+The protected `main` branch requires the `analyze` check from the CodeQL SAST
+workflow, which runs on pull requests and pushes to `main`; pull requests
+that omit this workflow cannot satisfy that required check.
 
 ## License
 
