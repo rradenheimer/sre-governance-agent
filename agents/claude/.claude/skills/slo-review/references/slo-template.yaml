@@ -1,0 +1,14 @@
+service: <service-name>
+owner: <team>
+slos:
+  - name: availability
+    sli: successful_requests / valid_requests
+    objective: 99.9
+    window: 30d
+  - name: latency-p99
+    sli: requests_under_300ms / valid_requests
+    objective: 99.0
+    window: 30d
+error_budget:
+  policy: "Freeze feature deploys when 30d budget is exhausted; focus on reliability."
+  owner: <team>

@@ -1,0 +1,20 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: github/codeql-action/init@v3
+      - uses: github/codeql-action/analyze@v3
+  iac-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkov
+        run: checkov -d .
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Canary deploy
+        run: ./deploy.sh --canary
+      - name: Generate SBOM
+        run: syft dir:. -o cyclonedx-json > sbom.json

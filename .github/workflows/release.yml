@@ -1,0 +1,48 @@
+name: Staged GitHub Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate version and run tests
+        run: |
+          VERSION="$(cat VERSION)"
+          test -n "$VERSION"
+          python -m pip install -r requirements.txt
+          PYTHONPATH=src python -m sre_governance.cli validate-config
+          python -m pytest -q
+          PYTHONPATH=src python -m sre_governance.cli scan --repo . --profile commercial
+          mkdir dist
+          git archive --format=tar.gz --output="dist/sre-governance-agent.tar.gz" \
+            HEAD src config agents docs policies requirements.txt README.md LICENSE VERSION
+      - name: Generate SPDX SBOM for release artifacts
+        uses: anchore/sbom-action@v0
+        with:
+          file: dist/sre-governance-agent.tar.gz
+          format: spdx-json
+          output-file: dist/sre-governance-agent.spdx.json
+      - name: Create immutable candidate release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="$(cat VERSION)"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "::error::Release v$VERSION already exists"
+            exit 1
+          fi
+          gh release create "v$VERSION" dist/* \
+            --target "$GITHUB_SHA" --title "SRE Governance Agent v$VERSION" \
+            --generate-notes --prerelease

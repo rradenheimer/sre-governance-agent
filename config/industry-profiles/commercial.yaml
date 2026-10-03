@@ -1,0 +1,32 @@
+# Industry Profile: Commercial
+# Pragmatic baseline for general commercial/startup teams. Maps to CIS + DORA
+# (DevOps Research & Assessment) practices and SLSA foundations.
+# Enforcement is WARNING by default (critical controls still block).
+profile: commercial
+display_name: Commercial / General
+description: >
+  For commercial product teams prioritizing velocity with a sane reliability and
+  security baseline. The agent warns on most gaps but still blocks on critical
+  integrity/security controls. AI automation may open PRs for low-risk fixes.
+baseline: standard
+enforcement: warning
+ai_autonomy: propose_pr
+require_human_approval: true
+frameworks: [CIS, SLSA, NIST-SSDF, DORA-DevOps]
+thresholds:
+  required_reviewers: 1
+  min_compliance_score: 75
+  max_critical_failures: 0
+  max_high_failures: 5
+default_status: recommended
+controls:
+  GOV-BP-010: mandatory
+  GOV-REV-011: mandatory
+  SEC-SECRETS-020: mandatory
+  SEC-SAST-021: mandatory
+  CMP-AUDIT-033: mandatory
+  SRE-SLO-001: mandatory
+data_handling:
+  allow_external_ai_calls: true
+  redact_secrets_in_prompts: true
+  retain_audit_days: 365

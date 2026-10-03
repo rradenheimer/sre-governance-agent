@@ -1,0 +1,48 @@
+name: Policy Validation
+
+# Validates the control catalog and industry profiles and runs the engine's unit
+# tests. This protects the governance rules themselves from regressions — the
+# policies are code and are tested like code.
+
+on:
+  pull_request:
+    paths:
+      - "config/**"
+      - "src/**"
+      - "tests/**"
+      - "policies/**"
+      - "requirements.txt"
+      - "pytest.ini"
+      - "conftest.py"
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install deps
+        run: pip install pyyaml pytest
+      - name: Validate catalog + profiles
+        run: PYTHONPATH=src python -m sre_governance.cli validate-config
+      - name: Run engine tests
+        run: python -m pytest -q
+      - name: Install Conftest
+        run: |
+          mkdir -p "$RUNNER_TEMP/conftest"
+          curl -fsSL "https://github.com/open-policy-agent/conftest/releases/download/v0.56.0/conftest_0.56.0_Linux_x86_64.tar.gz" \
+            -o "$RUNNER_TEMP/conftest.tar.gz"
+          echo "620f41640d63bbde1646a108ce2816ba54c980466ceebb7e754dda2d508e8cd5  $RUNNER_TEMP/conftest.tar.gz" \
+            | sha256sum --check -
+          tar -xzf "$RUNNER_TEMP/conftest.tar.gz" -C "$RUNNER_TEMP/conftest" conftest
+          echo "$RUNNER_TEMP/conftest" >> "$GITHUB_PATH"
+      - name: Verify OPA policies
+        run: conftest verify --policy policies/opa
